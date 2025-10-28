@@ -22,6 +22,10 @@ import tldextract
 import requests
 from dateutil import parser as date_parser
 from notion_client import Client
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # Optional OpenAI integration
 try:
@@ -115,8 +119,8 @@ def get_recent_notion_content(notion: Client, db_id: str, days: int = 7) -> Set[
         
         seen_content = set()
         for page in results.get("results", []):
-            # Extract title from Tweet Content property
-            title_prop = page["properties"].get("Tweet Content", {})
+            # Extract title from Title property
+            title_prop = page["properties"].get("Title", {})
             title_blocks = title_prop.get("title", [])
             if title_blocks:
                 content = "".join(b.get("plain_text", "") for b in title_blocks)
@@ -471,16 +475,16 @@ def notion_create_row(notion: Client, db_id: str, *, tweet: str,
                       status: str = "Scheduled", error: Optional[str] = None):
     """Create a row in the Notion database."""
     properties = {
-        "Tweet Content": {"title": [{"type": "text", "text": {"content": tweet}}]},
+        "Title": {"title": [{"type": "text", "text": {"content": tweet}}]},
         "Scheduled Time": {"date": {"start": scheduled_time.replace(microsecond=0).isoformat().replace('+00:00', 'Z')}},
         "Status": {"select": {"name": status}},
-        "Tweet URL": {"url": None},
+        "X URL": {"url": None},
         "LinkedIn URL": {"url": None},
     }
     if media_url:
-        properties["Media URLs"] = {"rich_text": [{"type": "text", "text": {"content": media_url}}]}
+        properties["Media URL"] = {"url": media_url}
     if error:
-        properties["Error Message"] = {"rich_text": [{"type": "text", "text": {"content": error[:1800]}}]}
+        properties["Error Log"] = {"rich_text": [{"type": "text", "text": {"content": error[:1800]}}]}
     
     return notion.pages.create(parent={"database_id": db_id}, properties=properties)
 
@@ -625,11 +629,11 @@ def main():
                 notion.pages.create(
                     parent={"database_id": NOTION_DB_ID},
                     properties={
-                        "Tweet Content": {
+                        "Title": {
                             "title": [{"text": {"content": "[ERROR] AI Content Fetcher failed"}}]
                         },
                         "Status": {"select": {"name": "Failed"}},
-                        "Error Message": {"rich_text": [{"text": {"content": str(e)[:1800]}}]},
+                        "Error Log": {"rich_text": [{"text": {"content": str(e)[:1800]}}]},
                         "Scheduled Time": {"date": {"start": scheduled_iso}}
                     }
                 )
