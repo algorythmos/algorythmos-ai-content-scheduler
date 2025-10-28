@@ -10,6 +10,10 @@ import io
 import tweepy
 import requests
 from notion_client import Client
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ----- Config -----
 UTC_NOW = datetime.now(timezone.utc)

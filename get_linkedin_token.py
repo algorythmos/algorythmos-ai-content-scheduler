@@ -73,7 +73,12 @@ def exchange_code_for_token(auth_code):
     except requests.exceptions.RequestException as e:
         print(f"\n❌ Error exchanging code for token: {e}")
         if hasattr(e, 'response') and e.response:
-            print(f"Response: {e.response.text}")
+            print(f"\n📋 Response status: {e.response.status_code}")
+            print(f"📋 Response body: {e.response.text}")
+            print(f"\n💡 This usually means:")
+            print(f"   - Client Secret is incorrect")
+            print(f"   - Client ID doesn't match the Client Secret")
+            print(f"   - Authorization code expired (get a new one)")
         sys.exit(1)
 
 
