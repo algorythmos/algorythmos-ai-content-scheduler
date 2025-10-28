@@ -1,0 +1,64 @@
+name: Post to X & LinkedIn
+
+on:
+  # Run once daily, ~5 minutes after fetcher (allows time for Notion write)
+  schedule:
+    - cron: "10 8 * 3-10 *"     # 08:10 UTC ≈ 10:10 Paris during CEST (Mar–Oct)
+    - cron: "10 9 * 11,12,1,2 *" # 09:10 UTC ≈ 10:10 Paris during CET (Nov–Feb)
+  workflow_run:
+    workflows: ["AI Content Fetcher"]  # run right after fetcher
+    types: [completed]
+  workflow_dispatch:  # Allow manual trigger
+
+concurrency:
+  group: social-poster
+  cancel-in-progress: true
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    if: >
+      github.event_name == 'schedule'
+      || github.event_name == 'workflow_dispatch'
+      || (github.event_name == 'workflow_run'
+          && github.event.workflow_run.conclusion == 'success')
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Pre-check Notion for ready posts
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+        run: python check_ready_to_post.py || { echo "No Scheduled rows ready. Skipping."; exit 0; }
+
+      - name: Post to X (Twitter)
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          X_ACCESS_TOKEN: ${{ secrets.ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.ACCESS_TOKEN_SECRET }}
+          X_API_KEY: ${{ secrets.API_KEY }}
+          X_API_SECRET: ${{ secrets.API_KEY_SECRET }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python main.py --platform x
+
+      - name: Post to LinkedIn
+        if: ${{ secrets.LINKEDIN_ACCESS_TOKEN != '' }}
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          LINKEDIN_ORG_ID: ${{ secrets.LINKEDIN_ORG_ID }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python main.py --platform linkedin
