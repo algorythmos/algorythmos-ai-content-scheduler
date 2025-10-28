@@ -1,4 +1,4 @@
-name: AI Content Fetcher
+name: 📰 Algorythmos Content Aggregator
 
 on:
   # Europe/Paris ≈ UTC+2 (Mar–Oct) and UTC+1 (Nov–Feb).
@@ -14,13 +14,14 @@ on:
         default: false
 
 concurrency:
-  group: ai-content-fetcher
+  group: algorythmos-content-aggregator
   cancel-in-progress: true
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    name: Aggregate AI News
     
     steps:
       - name: Checkout repository
@@ -35,7 +36,7 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
       
-      - name: Run AI Content Fetcher
+      - name: Aggregate and curate AI news
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}

@@ -1,4 +1,4 @@
-name: Post to X & LinkedIn
+name: 🚀 Algorythmos Social Publisher
 
 on:
   # Run once daily, ~5 minutes after fetcher (allows time for Notion write)
@@ -6,17 +6,18 @@ on:
     - cron: "10 8 * 3-10 *"     # 08:10 UTC ≈ 10:10 Paris during CEST (Mar–Oct)
     - cron: "10 9 * 11,12,1,2 *" # 09:10 UTC ≈ 10:10 Paris during CET (Nov–Feb)
   workflow_run:
-    workflows: ["AI Content Fetcher"]  # run right after fetcher
+    workflows: ["📰 Algorythmos Content Aggregator"]  # run right after fetcher
     types: [completed]
   workflow_dispatch:  # Allow manual trigger
 
 concurrency:
-  group: social-poster
+  group: algorythmos-social-publisher
   cancel-in-progress: true
 
 jobs:
   post:
     runs-on: ubuntu-latest
+    name: Publish to Social Media
     if: >
       github.event_name == 'schedule'
       || github.event_name == 'workflow_dispatch'
@@ -24,10 +25,10 @@ jobs:
           && github.event.workflow_run.conclusion == 'success')
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Python
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -36,13 +37,13 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Pre-check Notion for ready posts
+      - name: Verify content ready for publication
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
         run: python check_ready_to_post.py || { echo "No Scheduled rows ready. Skipping."; exit 0; }
 
-      - name: Post to X (Twitter)
+      - name: Publish to X (Twitter)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
@@ -53,7 +54,7 @@ jobs:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python main.py --platform x
 
-      - name: Post to LinkedIn
+      - name: Publish to LinkedIn
         if: ${{ secrets.LINKEDIN_ACCESS_TOKEN != '' }}
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
