@@ -1,118 +1,75 @@
-<div align="center"><div align="center"><h1 align="center">🧠 Notion-X Scheduler</h1>
+<div align="center">
+  <h1>🧠 Algorythmos AI Research Scheduler</h1>
 
-  <h1>🧠 Algorythmos AI Content Scheduler</h1>
+  <p><strong>Top AI Research → X & LinkedIn Automation</strong></p>
 
-  <p><strong>Enterprise AI News → X & LinkedIn Automation</strong></p>  <h1>AI Content Scheduler</h1><p align="center">
+  <p><i>arXiv → GPT-4o-mini → Notion → GitHub Actions → X + LinkedIn</i></p>
 
-  <p><i>RSS → GPT-4o-mini → Notion → GitHub Actions → X + LinkedIn</i></p>
+</div>
 
-</div>  <p><strong>Enterprise AI News → X & LinkedIn Automation</strong></p>  <i>Daily AI news → summarized → queued in Notion → posted to X (Twitter) — fully automated.</i>
-
-
-
-<p align="center">  <p>RSS → GPT-4o-mini → Notion → GitHub Actions → X + LinkedIn</p></p>
+<p align="center">
 
   <img src="https://img.shields.io/badge/Python-3.11-yellow?style=for-the-badge&logo=python"/>
 
-  <img src="https://img.shields.io/badge/OpenAI-gpt--4o--mini-2ea44f?style=for-the-badge&logo=openai"/></div>
+  <img src="https://img.shields.io/badge/OpenAI-gpt--4o--mini-2ea44f?style=for-the-badge&logo=openai"/>
 
   <img src="https://img.shields.io/badge/Notion-API-black?style=for-the-badge&logo=notion"/>
 
-  <img src="https://img.shields.io/badge/X-API-000000?style=for-the-badge&logo=x"/><p align="center">
+  <img src="https://img.shields.io/badge/X-API-000000?style=for-the-badge&logo=x"/>
 
   <img src="https://img.shields.io/badge/LinkedIn-API-0A66C2?style=for-the-badge&logo=linkedin"/>
 
-</p>![Python](https://img.shields.io/badge/Python-3.11-yellow?style=for-the-badge&logo=python)  <img src="https://img.shields.io/badge/version-v1.0.0-blue?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/arXiv-API-B31B1B?style=for-the-badge&logo=arxiv"/>
 
+  <img src="https://img.shields.io/badge/version-v2.0.0-blue?style=for-the-badge"/>
 
-
----![OpenAI](https://img.shields.io/badge/OpenAI-gpt--4o--mini-2ea44f?style=for-the-badge&logo=openai)  <img src="https://img.shields.io/github/actions/workflow/status/skalaliya/notion-x-scheduler/fetch.yml?label=AI%20Fetcher&style=for-the-badge"/>
-
-
-
-## Overview![Notion](https://img.shields.io/badge/Notion-API-black?style=for-the-badge&logo=notion)  <img src="https://img.shields.io/github/actions/workflow/status/skalaliya/notion-x-scheduler/post.yml?label=X%20Poster&style=for-the-badge"/>
-
-
-
-This repo **automatically curates, summarizes, and posts** the freshest AI news to **X (Twitter) and LinkedIn** — fully managed via **Notion** and **GitHub Actions**.![X](https://img.shields.io/badge/X-API-000000?style=for-the-badge&logo=x)  <img src="https://img.shields.io/badge/OpenAI-gpt--4o--mini-2ea44f?style=for-the-badge&logo=openai"/>
-
-
-
-- **<6h old news** gets +15 points![LinkedIn](https://img.shields.io/badge/LinkedIn-API-0A66C2?style=for-the-badge&logo=linkedin)  <img src="https://img.shields.io/badge/Notion-API-black?style=for-the-badge&logo=notion"/>
-
-- **Duplicate prevention** (7-day Notion history)
-
-- **Source diversity** (no single feed dominates)  <img src="https://img.shields.io/badge/Python-3.11-yellow?style=for-the-badge&logo=python"/>
-
-- **OpenAI fallback** if API fails
-
-- **Full observability** in Notion + Actions logs---</p>
-
-
-
-**Built and maintained by:** Algorythmos
-
-
-
----## Overview---
-
-
-
-## Architecture
-
-
-
-```mermaidThis repo **automatically curates, summarizes, and posts** the freshest AI news to **X (Twitter) and LinkedIn** — fully managed via **Notion** and **GitHub Actions**.## Overview
-
-graph TD
-
-    A[AI RSS Feeds] --> B[fetch_ai_news.py]
-
-    B -->|Summarize with gpt-4o-mini| C[Notion DB]
-
-    C -->|Status=Scheduled| D[Workflow Chaining]- **<6h old news** gets +15 pointsThis repo automatically curates and posts AI news to X (Twitter) using an efficient two-stage pipeline:
-
-    D --> E[main.py]
-
-    E -->|X API| F[Tweet Published 🚀]- **Duplicate prevention** (7-day Notion history)
-
-    E -->|LinkedIn API| G[Post Published 🚀]
-
-    F & G --> H[Update Notion with URLs]- **Source diversity** (no single feed dominates)1. **Fetcher** runs once daily at ~10:05 AM Europe/Paris time (DST-aware), parses 7 trusted AI RSS feeds, scores articles by relevance and recency, summarizes the top pick with OpenAI's `gpt-4o-mini`, and queues it in your Notion database with `Status=Scheduled`.
-
-```
-
-- **OpenAI fallback** if API fails
+</p>
 
 ---
 
-- **Full observability** in Notion + Actions logs2. **Poster** runs at ~10:10 AM (5 minutes after fetcher) to publish queued content. Also triggers immediately when fetcher completes successfully via event-chaining for zero-delay posting.
+## Overview
+
+This repo **automatically discovers, summarizes, and shares** cutting-edge AI research papers from **arXiv** to **X (Twitter) and LinkedIn** — fully managed via **Notion** and **GitHub Actions**.
+
+**Focus:** State-of-the-art (SOTA) innovations in cs.AI, cs.LG, cs.CL, cs.CV
+
+- **<24h papers** get +20 points
+- **Innovation keywords** (SOTA, novel, breakthrough) +5pts each  
+- **Duplicate prevention** via arXiv ID matching
+- **Research-focused summaries** highlighting key contributions
+- **Full observability** in Notion + Actions logs
+
+**Built and maintained by:** Algorythmos
+
+---
+
+## Architecture
+
+```mermaid
+graph TD
+    A[arXiv API] --> B[fetch_ai_news.py]
+    B -->|Score papers by novelty/recency| C[GPT-4o-mini Summarization]
+    C -->|Research-focused summaries| D[Notion DB]
+    D -->|Status=Scheduled| E[Workflow Chaining]
+    E -->|X API| F[Tweet Published 🚀]
+    E -->|LinkedIn API| G[Post Published 🚀]
+    F & G --> H[Update Notion with URLs]
+```
+
+---
 
 ## Features
 
-
-
-* 📰 **Multi-source AI feeds** (OpenAI, Google AI, DeepMind, NVIDIA, AWS ML, TechCrunch, VentureBeat)
-
-* 🧠 **Smart summarization** with `gpt-4o-mini` (cost-effective, high-quality) — graceful fallback to heuristics**Built and maintained by:** Algorythmos**Built and maintained by:** @skalaliya
-
-* 🗂️ **Notion as content queue** (`Status=Scheduled` + `Scheduled Time` properties)
-
-* ⏰ **DST-aware scheduling**: Runs once daily at ~10:05 AM Paris time year-round (dual UTC crons)
-
-* 🔁 **Event-chained workflows**: Poster auto-triggers after successful fetch for instant publishing
-
-* 🛡️ **Pre-check validation**: Skips poster run if no ready posts exist (saves compute minutes)------
-
-* 🧪 **Dry-run mode**: Test with `--dry-run` flag or workflow dispatch for JSON output
-
-* 🎯 **Relevance scoring**: Keyword matching + recency decay (48h window)
-
-* 🔄 **Dual platform posting**: Automatically posts to both X (Twitter) and LinkedIn
-
-* 🔗 **URL tracking**: Stores `X URL` and `LinkedIn URL` back in Notion after posting## Workflow## Architecture
-
-* 💰 **Compute-optimized**: ~45 minutes/month usage (2% of GitHub free tier)
+* 📚 **Research paper sources** (arXiv cs.AI, cs.LG, cs.CL, cs.CV)
+* 🏆 **SOTA-focused scoring** (novelty keywords, recency, innovation indicators)
+* 🧠 **Smart summarization** with `gpt-4o-mini` — highlights innovations, methods, results
+* 🗂️ **Notion as research queue** (includes arXiv ID, authors, categories)
+* ⏰ **DST-aware scheduling**: Runs daily at ~10:05 AM Paris time
+* 🔁 **Event-chained workflows**: Poster auto-triggers after fetch
+* 🛡️ **Duplicate prevention**: arXiv ID tracking + title similarity
+* 🎯 **Platform-optimized**: Short for X (≤280 chars), detailed for LinkedIn (≤2000 chars)
+* 🔗 **URL tracking**: Stores arXiv link, X URL, LinkedIn URL in Notion
+* 💰 **Compute-optimized**: ~45 minutes/month (2% of GitHub free tier)
 
 
 
@@ -398,35 +355,35 @@ trigger-publisher:
 
 
 
-### Relevance Scoring Algorithm
+### Scoring Algorithm (Research Papers)
 
-
-
-Each article gets scored (0-22 points):## Project StructureBoth workflows use **dual UTC cron schedules** to maintain consistent Paris local time while minimizing compute usage:
-
-
+Each paper gets scored (0-50+ points):
 
 ```python
+# Recency (time-sensitive for research)
+if age < 24h: score += 20  # Brand new
+elif age < 48h: score += 15
+elif age < 96h: score += 10
+elif age < 168h: score += 5
 
-base_score = len([kw for kw in BOOST_KEYWORDS if kw.lower() in title.lower()])
+# Innovation keywords (SOTA indicators)
+for keyword in ["state-of-the-art", "SOTA", "novel", "breakthrough"]:
+    if keyword in title/abstract: score += 5
 
-recency_boost = 15 if age_hours < 6 else (8 if age_hours < 12 else 0)```**Fetcher Schedule:**
+# General AI keywords  
+for keyword in ["LLM", "transformer", "diffusion", "RL"]:
+    if keyword in title/abstract: score += 2
 
-final_score = base_score + recency_boost
+# Category boost
+if primary_category in ["cs.AI", "cs.LG"]: score += 3
 
-```algorythmos-ai-content-scheduler/* **Mar–Oct (CEST, UTC+2)**: `5 8 * 3-10 *` → 08:05 UTC = 10:05 Paris
+# arXiv ID duplicate check
+if arxiv_id in recent_posts: score -= 100
+```
 
-
-
-**Boost keywords:** AI, GenAI, LLM, agents, model, inference, NVIDIA, OpenAI, Anthropic, Meta├── fetch_ai_news.py          # AI news fetcher (RSS → scoring → summarize → Notion)* **Nov–Feb (CET, UTC+1)**: `5 9 * 11,12,1,2 *` → 09:05 UTC = 10:05 Paris
-
-
-
-**Example scores:**├── main.py                   # X/Twitter & LinkedIn poster (Notion → Social APIs)
-
-- "NVIDIA Announces New LLM Agents" (2h old) → 4 keywords + 15 recency = **19 points**
-
-- "Google AI Model Update" (10h old) → 2 keywords + 8 recency = **10 points**├── check_ready_to_post.py    # Pre-check validation for poster**Poster Schedule:**
+**Example scores:**
+- "Novel SOTA LLM for Reasoning" (12h old) → 20 (recency) + 10 (SOTA+novel) + 6 (LLM) + 3 (cs.AI) = **39 points**
+- "Improved Transformer Architecture" (2 days old) → 15 + 2 (improved) + 2 (transformer) = **19 points**
 
 
 

@@ -591,12 +591,12 @@ def score_items(items: List[NewsItem], notion_recent: Optional[Set[Tuple[str, st
 
 
 # ----- Summarization -----
-def summarize_with_openai_dual(paper: ResearchPaper) -> Dict[str, Any]:
+def summarize_with_openai_dual(title: str, link: str, domain: str) -> Dict[str, Any]:
     """
-    Use OpenAI to generate platform-specific summaries for research papers.
+    Use OpenAI to generate platform-specific summaries for X and LinkedIn.
     Returns dict with: {"x_text": str, "linkedin_text": str, "char_counts": dict}
     """
-    logger.debug(f"summarize_with_openai_dual() called for: {paper.title[:50]}...")
+    logger.debug(f"summarize_with_openai_dual() called for: {title[:50]}...")
     
     if not OPENAI_AVAILABLE or not OPENAI_API_KEY:
         logger.error("OpenAI not available or API key missing")
@@ -610,196 +610,14 @@ def summarize_with_openai_dual(paper: ResearchPaper) -> Dict[str, Any]:
         logger.error(f"Failed to initialize OpenAI client: {e}", exc_info=True)
         raise
     
-    # Research-focused prompt for dual-platform content generation
-    sys_msg = """You are an expert AI research communicator for Algorythmos, a France-based AI automation firm. Summarize cutting-edge AI research papers for professional audiences on X (Twitter) and LinkedIn. Generate TWO versions:
+    # Enhanced prompt for dual-platform content generation
+    sys_msg = """You are an expert AI content curator for Algorythmos, a France-based AI automation firm. Summarize the following article for social posting. Generate TWO versions:
 
-1. **X (Twitter) Version**: ≤280 characters total (including spaces, emojis, hashtags). Focus on the SOTA contribution or breakthrough. Make it punchy: "New SOTA in [area]: [key innovation]". Include 1-2 hashtags like #AIResearch #MachineLearning. End with arXiv link.
+1. **X (Twitter) Version**: ≤280 characters total (including spaces, emojis, hashtags). Make it punchy, engaging, with a hook, 1-2 key insights, a question or CTA, and end with the link. Use 1-2 relevant hashtags (#AI, #MachineLearning). Keep it concise and impactful.
 
-2. **LinkedIn Version**: ≤2000 characters total. Professional deep-dive for AI practitioners:
-   - Start with hook highlighting the innovation
-   - 3-5 bullet points covering: problem, method, results/improvements, implications
-   - Explain relevance to Algorythmos (e.g., "This could enhance our MLOps pipelines" or "Relevant for our AI automation workflows")
-   - End with thought-provoking question for engagement
-   - Use 2-3 hashtags: #AIResearch #MachineLearning #DeepLearning
-   - Include arXiv link
+2. **LinkedIn Version**: ≤2000 characters total. Professional tone for AI professionals: Start with a compelling hook, include 3-5 bullet takeaways, brief analysis/implications for enterprises, CTA to discuss or connect, and the link. Use 2-3 hashtags. Include emojis sparingly for readability. Make it informative and valuable.
 
 Output STRICTLY as valid JSON (no extra text, no markdown code blocks):
-{
-  "x_text": "Full X post text here (≤280 chars)",
-  "linkedin_text": "Full LinkedIn post text here (≤2000 chars)",
-  "char_counts": {
-    "x": [exact character count],
-    "linkedin": [exact character count]
-  }
-}
-
-Guidelines:
-- Focus on **innovations, SOTA results, novel methods**
-- Highlight quantitative improvements if mentioned (e.g., "+15% accuracy", "10x faster")
-- Explain technical concepts clearly for practitioners
-- Tie to Algorythmos mission: AI automation, MLOps, enterprise AI
-- Be factual, professional, and research-focused
-- Do NOT include URLs in character counts (append separately)
-- Keep X version under 280 chars, LinkedIn under 2000 chars"""
-    
-    # Prepare paper context for LLM
-    authors_str = ", ".join(paper.authors[:3])  # First 3 authors
-    if len(paper.authors) > 3:
-        authors_str += f" et al. ({len(paper.authors)} authors)"
-    
-    user_msg = f"""Research Paper Details:
-
-Title: {paper.title}
-Authors: {authors_str}
-arXiv ID: {paper.arxiv_id}
-Categories: {', '.join(paper.categories[:3])}
-Published: {paper.published.strftime('%Y-%m-%d')}
-
-Abstract:
-{paper.abstract}
-
-arXiv Link: https://arxiv.org/abs/{paper.arxiv_id}
-
-Generate engaging social media content highlighting the key innovations and SOTA contributions."""
-    
-    logger.debug(f"Sending request to OpenAI - Model: {OPENAI_MODEL}")
-    logger.debug(f"Paper: {paper.arxiv_id}, Abstract length: {len(paper.abstract)} chars")
-    
-    try:
-        resp = client.chat.completions.create(
-            model=OPENAI_MODEL,
-            messages=[
-                {"role": "system", "content": sys_msg},
-                {"role": "user", "content": user_msg},
-            ],
-            temperature=0.7,  # Balanced creativity for research communication
-            max_tokens=1500,  # Support longer LinkedIn posts
-            response_format={"type": "json_object"}  # Force JSON response
-        )
-        
-        logger.debug(f"OpenAI API response received - Usage: {resp.usage}")
-        raw_response = (resp.choices[0].message.content or "").strip()
-        logger.debug(f"Raw OpenAI response: {raw_response[:500]}...")
-        
-        # Parse JSON response
-        try:
-            result = json.loads(raw_response)
-            logger.debug(f"Parsed JSON successfully - Keys: {list(result.keys())}")
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse OpenAI JSON response: {e}")
-            logger.error(f"Raw response: {raw_response}")
-            raise RuntimeError(f"Invalid JSON from OpenAI: {e}")
-        
-        # Extract and validate texts
-        x_text = result.get("x_text", "").strip()
-        linkedin_text = result.get("linkedin_text", "").strip()
-        char_counts = result.get("char_counts", {})
-        
-        if not x_text or not linkedin_text:
-            logger.error(f"Missing texts in OpenAI response: x_text={bool(x_text)}, linkedin_text={bool(linkedin_text)}")
-            raise RuntimeError("OpenAI did not return both platform texts")
-        
-        # Validate and truncate if needed
-        original_x_len = len(x_text)
-        original_linkedin_len = len(linkedin_text)
-        
-        if len(x_text) > MAX_X_CHARS:
-            logger.warning(f"⚠️ X text exceeded limit ({len(x_text)} > {MAX_X_CHARS}), truncating...")
-            x_text = x_text[:MAX_X_CHARS - 3] + "..."
-        
-        if len(linkedin_text) > MAX_LINKEDIN_CHARS:
-            logger.warning(f"⚠️ LinkedIn text exceeded limit ({len(linkedin_text)} > {MAX_LINKEDIN_CHARS}), truncating...")
-            linkedin_text = linkedin_text[:MAX_LINKEDIN_CHARS - 3] + "..."
-        
-        logger.info(f"✅ Generated dual-platform research summaries:")
-        logger.info(f"   🐦 X: {len(x_text)}/{MAX_X_CHARS} chars (original: {original_x_len})")
-        logger.info(f"   💼 LinkedIn: {len(linkedin_text)}/{MAX_LINKEDIN_CHARS} chars (original: {original_linkedin_len})")
-        logger.debug(f"X text: {x_text}")
-        logger.debug(f"LinkedIn text preview: {linkedin_text[:200]}...")
-        
-        return {
-            "x_text": x_text,
-            "linkedin_text": linkedin_text,
-            "char_counts": {
-                "x": len(x_text),
-                "linkedin": len(linkedin_text)
-            }
-        }
-    
-    except Exception as e:
-        logger.error(f"OpenAI API error: {type(e).__name__}: {e}", exc_info=True)
-        raise
-
-
-def summarize_fallback(paper: ResearchPaper) -> Dict[str, Any]:
-    """
-    Fallback summarization when OpenAI is unavailable.
-    Returns dict with x_text and linkedin_text based on paper metadata.
-    """
-    logger.debug(f"summarize_fallback() called for: {paper.title[:50]}...")
-    
-    # Generate X version (short, highlight key info)
-    authors_short = paper.authors[0] if paper.authors else "Unknown"
-    if len(paper.authors) > 1:
-        authors_short += " et al."
-    
-    x_text = f"📄 New {paper.primary_category} paper: {paper.title[:100]}... by {authors_short} #AIResearch #ML"
-    
-    if len(x_text) > MAX_X_CHARS:
-        x_text = paper.title[:MAX_X_CHARS - 50] + f"... by {authors_short} #AIResearch"
-    
-    # Generate LinkedIn version (longer, more context)
-    authors_list = ", ".join(paper.authors[:5])
-    if len(paper.authors) > 5:
-        authors_list += f" et al. ({len(paper.authors)} total)"
-    
-    linkedin_text = f"""📄 **New Research: {paper.title}**
-
-**Authors:** {authors_list}
-**arXiv ID:** {paper.arxiv_id}
-**Category:** {paper.primary_category}
-**Published:** {paper.published.strftime('%B %d, %Y')}
-
-**Abstract:**
-{paper.abstract[:800]}{'...' if len(paper.abstract) > 800 else ''}
-
-This paper contributes to the growing body of AI research in {paper.primary_category.replace('cs.', '')} research.
-
-What are your thoughts on this approach? How might it impact production AI systems?
-
-#AIResearch #MachineLearning #DeepLearning
-
-🔗 Read full paper: https://arxiv.org/abs/{paper.arxiv_id}"""
-    
-    if len(linkedin_text) > MAX_LINKEDIN_CHARS:
-        linkedin_text = linkedin_text[:MAX_LINKEDIN_CHARS - 3] + "..."
-    
-    logger.info(f"Generated fallback summaries: X={len(x_text)} chars, LinkedIn={len(linkedin_text)} chars")
-    
-    return {
-        "x_text": x_text,
-        "linkedin_text": linkedin_text,
-        "char_counts": {
-            "x": len(x_text),
-            "linkedin": len(linkedin_text)
-        }
-    }
-
-
-def summarize_paper(paper: ResearchPaper) -> Dict[str, Any]:
-    """
-    Generate platform-specific summaries using OpenAI if available, otherwise fallback.
-    Returns dict with x_text, linkedin_text, and char_counts.
-    """
-    if OPENAI_API_KEY:
-        try:
-            logger.info("🤖 Using OpenAI for dual-platform research summarization")
-            return summarize_with_openai_dual(paper)
-        except Exception as e:
-            logger.warning(f"⚠️ OpenAI summarization failed, using fallback: {e}")
-    
-    logger.info("Using fallback summarization for research paper")
-    return summarize_fallback(paper)
 {
   "x_text": "Full X post text here (≤280 chars)",
   "linkedin_text": "Full LinkedIn post text here (≤2000 chars)",
