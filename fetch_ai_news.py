@@ -515,8 +515,8 @@ def old_score_items_placeholder():
     return items
 
 
-# ----- Scoring -----
-def score_items(items: List[NewsItem], notion_recent: Optional[Set[Tuple[str, str]]] = None) -> List[NewsItem]:
+# ----- Scoring ----- (OLD - COMMENTED OUT)
+# def score_items(items: List[NewsItem], notion_recent: Optional[Set[Tuple[str, str]]] = None) -> List[NewsItem]:
     """
     Score items based on recency, keyword matches, and source diversity.
     Enhanced with:
