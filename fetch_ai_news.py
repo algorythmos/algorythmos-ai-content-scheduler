@@ -553,7 +553,9 @@ def ensure_notion_schema():
         "Score": {"number": {"format": "number"}},
         "Status": {"select": {"options": []}},  # Will use existing options
         "Scheduled Time": {"date": {}},
-        "X URL": {"url": {}},
+        "Posted Time": {"date": {}},  # When the post was published
+        "Tweet URL": {"url": {}},  # X/Twitter post URL
+        "X URL": {"url": {}},  # Alias for Tweet URL (legacy)
         "LinkedIn URL": {"url": {}},
         "Error Message": {"rich_text": {}},  # For tracking posting errors
     }
