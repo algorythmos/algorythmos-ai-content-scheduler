@@ -528,11 +528,16 @@ def run(platform: str):
             page_id = page["id"]
             
             # Get platform-specific text
-            # For X: Use Title (contains X-optimized text ≤280 chars)
-            # For LinkedIn: Try LinkedIn Text property first, fallback to Title
+            # For X: Use X Text property (≤280 chars), fallback to Title
+            # For LinkedIn: Use LinkedIn Text property, fallback to Title
             if platform == 'x':
-                text = get_prop_text(page, "Title").strip()
-                logger.debug(f"Using Title for X post: {len(text)} chars")
+                x_text = get_prop_text(page, "X Text").strip()
+                if x_text:
+                    text = x_text
+                    logger.debug(f"Using X Text property: {len(text)} chars")
+                else:
+                    text = get_prop_text(page, "Title").strip()
+                    logger.debug(f"X Text empty, using Title as fallback: {len(text)} chars")
             elif platform == 'linkedin':
                 # Try LinkedIn Text property first
                 linkedin_text = get_prop_text(page, "LinkedIn Text").strip()
