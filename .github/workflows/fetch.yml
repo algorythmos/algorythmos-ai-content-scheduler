@@ -1,4 +1,4 @@
-name: 📰 Algorythmos Content Aggregator
+name: � AI Research Aggregator
 
 on:
   # Run 15 minutes before daily posting (09:45 AM Paris time)
@@ -8,34 +8,34 @@ on:
   workflow_dispatch:
     inputs:
       dry_run:
-        description: "Only print; do not write to Notion"
+        description: "Dry run mode (preview only, no Notion updates)"
         type: boolean
         default: false
 
 concurrency:
-  group: algorythmos-content-aggregator
+  group: ai-research-aggregator
   cancel-in-progress: true
 
 jobs:
   fetch:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    name: Aggregate AI News
+    name: Fetch & Curate arXiv Papers
     
     steps:
-      - name: Checkout repository
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4
       
-      - name: Set up Python 3.11
+      - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
       
-      - name: Install dependencies
+      - name: 📚 Install dependencies
         run: pip install -r requirements.txt
       
-      - name: Aggregate and curate AI news
+      - name: 🔬 Fetch and curate research papers
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
@@ -43,13 +43,15 @@ jobs:
           OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
         run: |
           if [ "${{ inputs.dry_run }}" = "true" ]; then
+            echo "🧪 Running in dry-run mode..."
             python fetch_ai_news.py --dry-run
           else
+            echo "🚀 Fetching latest AI research from arXiv..."
             python fetch_ai_news.py
           fi
 
   trigger-publisher:
-    name: Trigger Social Publisher
+    name: Queue for Publishing
     needs: [fetch]
     if: ${{ success() && !inputs.dry_run }}
     runs-on: ubuntu-latest

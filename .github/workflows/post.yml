@@ -1,10 +1,10 @@
-name: 🚀 Algorythmos Social Publisher (Manual)
+name: 🚀 Manual Publisher
 
 on:
   workflow_dispatch:
     inputs:
       platform:
-        description: 'Platform to post to'
+        description: 'Target platform'
         required: true
         default: 'both'
         type: choice
@@ -14,7 +14,7 @@ on:
           - both
 
 concurrency:
-  group: algorythmos-social-publisher
+  group: manual-publisher
   cancel-in-progress: true
 
 jobs:
@@ -32,10 +32,10 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name:  Install dependencies
+      - name: 📚 Install dependencies
         run: pip install -r requirements.txt
 
-      - name: � Publish to platform(s)
+      - name: 🚀 Publish to platform(s)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
@@ -47,5 +47,5 @@ jobs:
           LINKEDIN_ORG_ID: ${{ secrets.LINKEDIN_ORG_ID }}
           LOG_LEVEL: INFO
         run: |
-          echo "� Publishing to: ${{ inputs.platform }}"
+          echo "🚀 Publishing to: ${{ inputs.platform }}"
           python main.py --platform ${{ inputs.platform }}

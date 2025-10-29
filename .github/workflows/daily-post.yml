@@ -1,4 +1,4 @@
-name: 📅 Daily AI Research Post (10 AM Paris)
+name: 📅 Daily Research Digest
 
 on:
   # 10:00 AM Paris time year-round (handles CET/CEST automatically)
@@ -8,13 +8,13 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: daily-ai-research-post
+  group: daily-research-digest
   cancel-in-progress: true
 
 jobs:
   post:
     runs-on: ubuntu-latest
-    name: Post AI Research to X and LinkedIn
+    name: Publish Research to Social Media
     
     steps:
       - name: 📦 Checkout repository
@@ -32,7 +32,8 @@ jobs:
       - name: ⏰ Display current time
         run: |
           echo "⏰ Current time (UTC): $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
-          echo "📍 This corresponds to 10:00 AM Paris time"
+          echo "📍 Target: 10:00 AM Paris time"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
       
       - name: 🐦 Post to X (Twitter)
         env:
@@ -44,12 +45,12 @@ jobs:
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           LOG_LEVEL: INFO
         run: |
-          echo "🐦 Posting to X (Twitter)..."
+          echo "🐦 Publishing to X..."
           python main.py --platform x
           if [ $? -eq 0 ]; then
             echo "✅ Successfully posted to X"
           else
-            echo "❌ Failed to post to X"
+            echo "❌ X posting failed"
             exit 1
           fi
       
@@ -61,22 +62,22 @@ jobs:
           LINKEDIN_ORG_ID: ${{ secrets.LINKEDIN_ORG_ID }}
           LOG_LEVEL: INFO
         run: |
-          echo "💼 Posting to LinkedIn..."
+          echo "💼 Publishing to LinkedIn..."
           python main.py --platform linkedin
           if [ $? -eq 0 ]; then
             echo "✅ Successfully posted to LinkedIn"
           else
-            echo "❌ Failed to post to LinkedIn"
+            echo "❌ LinkedIn posting failed"
             exit 1
           fi
       
-      - name: 🎉 Post completion summary
+      - name: 🎉 Publish completion summary
         if: success()
         run: |
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-          echo "🎉 Daily AI Research Post Complete!"
+          echo "🎉 Daily Research Digest Published"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
           echo "✅ Posted to X (Twitter)"
           echo "✅ Posted to LinkedIn"
-          echo "📅 Next post: Tomorrow at 10:00 AM Paris time"
+          echo "📅 Next digest: Tomorrow at 10:00 AM Paris"
           echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
