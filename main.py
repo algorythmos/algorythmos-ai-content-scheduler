@@ -91,7 +91,7 @@ def get_media_urls(p: Dict[str, Any]) -> List[str]:
     return urls
 
 def update_notion_status(page_id: str, status: str, platform: str = None, 
-                        post_url: str = None, error_msg: str = None):
+                        post_url: str = None, error_msg: str = None, visibility_warning: str = None):
     """Update Notion page with status and optional post URL."""
     properties = {
         "Status": {"select": {"name": status}},
@@ -106,12 +106,160 @@ def update_notion_status(page_id: str, status: str, platform: str = None,
         elif platform == "linkedin":
             properties["LinkedIn URL"] = {"url": post_url}
     
+    # Combine error message and visibility warning
+    full_error = []
     if error_msg:
-        properties["Error Message"] = {"rich_text": [{"text": {"content": error_msg[:1800]}}]}
+        full_error.append(f"Error: {error_msg}")
+    if visibility_warning:
+        full_error.append(f"⚠️ Visibility: {visibility_warning}")
+    
+    if full_error:
+        properties["Error Message"] = {"rich_text": [{"text": {"content": "\n".join(full_error)[:1800]}}]}
     else:
         properties["Error Message"] = {"rich_text": []}
     
     notion.pages.update(page_id, properties=properties)
+    
+    if visibility_warning:
+        logger.warning(f"Updated Notion with visibility warning: {visibility_warning}")
+
+# ----- Post Visibility Verification -----
+def verify_x_post(tweet_id: str) -> Dict[str, Any]:
+    """
+    Verify that a tweet is actually visible and public.
+    Returns dict with 'visible', 'status', and 'error' keys.
+    """
+    try:
+        client = tweepy.Client(bearer_token=os.getenv("X_BEARER_TOKEN") or X_ACCESS_TOKEN)
+        
+        # Fetch tweet details
+        tweet = client.get_tweet(
+            id=tweet_id,
+            tweet_fields=["created_at", "public_metrics", "possibly_sensitive"]
+        )
+        
+        if tweet.data:
+            logger.debug(f"✅ Tweet {tweet_id} is visible")
+            logger.debug(f"Tweet data: {tweet.data}")
+            return {
+                "visible": True,
+                "status": "PUBLISHED",
+                "metrics": tweet.data.public_metrics,
+                "error": None
+            }
+        else:
+            logger.warning(f"⚠️ Tweet {tweet_id} exists but no data returned")
+            return {
+                "visible": False,
+                "status": "UNKNOWN",
+                "error": "No data in API response"
+            }
+    
+    except tweepy.errors.NotFound:
+        logger.error(f"❌ Tweet {tweet_id} not found - may be deleted or hidden")
+        return {
+            "visible": False,
+            "status": "NOT_FOUND",
+            "error": "Tweet not found (deleted or hidden)"
+        }
+    except Exception as e:
+        logger.error(f"Error verifying tweet {tweet_id}: {e}", exc_info=True)
+        return {
+            "visible": False,
+            "status": "ERROR",
+            "error": str(e)
+        }
+
+def verify_linkedin_post(post_urn: str, max_retries: int = 3) -> Dict[str, Any]:
+    """
+    Verify that a LinkedIn post is actually visible and published.
+    Retries if status is PROCESSING (LinkedIn moderation delay).
+    Returns dict with 'visible', 'status', and 'error' keys.
+    """
+    if not LINKEDIN_ACCESS_TOKEN:
+        return {"visible": False, "status": "ERROR", "error": "No access token"}
+    
+    headers = {
+        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}",
+        "X-Restli-Protocol-Version": "2.0.0"
+    }
+    
+    for attempt in range(max_retries):
+        try:
+            # Query post details
+            response = requests.get(
+                f"https://api.linkedin.com/v2/ugcPosts/{post_urn}",
+                headers=headers,
+                timeout=10
+            )
+            
+            logger.debug(f"LinkedIn verify attempt {attempt + 1}/{max_retries}: status {response.status_code}")
+            
+            if response.status_code == 200:
+                data = response.json()
+                lifecycle_state = data.get("lifecycleState", "UNKNOWN")
+                visibility = data.get("visibility", {})
+                
+                logger.debug(f"LinkedIn post {post_urn}: lifecycleState={lifecycle_state}, visibility={visibility}")
+                
+                if lifecycle_state == "PUBLISHED":
+                    logger.debug(f"✅ LinkedIn post {post_urn} is published")
+                    return {
+                        "visible": True,
+                        "status": "PUBLISHED",
+                        "lifecycle": lifecycle_state,
+                        "visibility": visibility,
+                        "error": None
+                    }
+                elif lifecycle_state == "PROCESSING":
+                    logger.info(f"⏳ LinkedIn post {post_urn} still processing (attempt {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        time.sleep(60)  # Wait 60s before retry
+                        continue
+                    return {
+                        "visible": False,
+                        "status": "PROCESSING",
+                        "error": f"Still processing after {max_retries * 60}s - check manually"
+                    }
+                else:
+                    logger.warning(f"⚠️ LinkedIn post {post_urn} has unexpected state: {lifecycle_state}")
+                    return {
+                        "visible": False,
+                        "status": lifecycle_state,
+                        "error": f"Unexpected lifecycle state: {lifecycle_state}"
+                    }
+            
+            elif response.status_code == 404:
+                logger.error(f"❌ LinkedIn post {post_urn} not found")
+                return {
+                    "visible": False,
+                    "status": "NOT_FOUND",
+                    "error": "Post not found (may be deleted or hidden)"
+                }
+            else:
+                logger.error(f"LinkedIn verify API error: {response.status_code} - {response.text}")
+                return {
+                    "visible": False,
+                    "status": "ERROR",
+                    "error": f"API error {response.status_code}: {response.text[:200]}"
+                }
+        
+        except Exception as e:
+            logger.error(f"Error verifying LinkedIn post {post_urn}: {e}", exc_info=True)
+            if attempt < max_retries - 1:
+                time.sleep(60)
+                continue
+            return {
+                "visible": False,
+                "status": "ERROR",
+                "error": str(e)
+            }
+    
+    return {
+        "visible": False,
+        "status": "TIMEOUT",
+        "error": f"Verification timed out after {max_retries} attempts"
+    }
 
 # ----- X (Twitter) Posting -----
 def post_to_x(text: str, media_urls: List[str] = None) -> str:
@@ -179,6 +327,26 @@ def post_to_x(text: str, media_urls: List[str] = None) -> str:
         tweet_url = f"https://x.com/i/web/status/{tweet_id}"
         
         logger.info(f"✅ Posted to X successfully: {tweet_url}")
+        
+        # Add human-like delay before verification
+        time.sleep(5)
+        
+        # Verify post visibility
+        logger.info(f"🔍 Verifying tweet visibility...")
+        verification = verify_x_post(tweet_id)
+        
+        if not verification["visible"]:
+            logger.error(f"❌ Tweet created but NOT VISIBLE: {verification['error']}")
+            logger.error(f"   Status: {verification['status']}")
+            logger.error(f"   Tweet ID: {tweet_id}")
+            logger.error(f"   This may indicate:")
+            logger.error(f"   - Account flagged for automation (follow 20+ accounts to warm up)")
+            logger.error(f"   - Tweet hidden by X algorithm (low engagement/new account)")
+            logger.error(f"   - Content moderation (check X rules)")
+            # Still return URL so it's tracked in Notion
+        else:
+            logger.info(f"✅ Tweet verified as visible with metrics: {verification.get('metrics')}")
+        
         return tweet_url
     except Exception as e:
         logger.error(f"❌ Failed to post to X: {type(e).__name__}: {e}", exc_info=True)
@@ -285,6 +453,25 @@ def post_to_linkedin(text: str, media_urls: List[str] = None) -> str:
         if post_id:
             post_url = f"https://www.linkedin.com/feed/update/{post_id}"
             logger.info(f"✅ Posted to LinkedIn successfully: {post_url}")
+            
+            # Verify post visibility (with retry for PROCESSING state)
+            logger.info(f"🔍 Verifying LinkedIn post visibility (may take up to 3 min)...")
+            verification = verify_linkedin_post(post_id, max_retries=3)
+            
+            if not verification["visible"]:
+                logger.error(f"❌ LinkedIn post created but NOT VISIBLE: {verification['error']}")
+                logger.error(f"   Status: {verification['status']}")
+                logger.error(f"   Post ID: {post_id}")
+                logger.error(f"   This may indicate:")
+                logger.error(f"   - Post still processing (check in 10-30 min)")
+                logger.error(f"   - Content moderation review")
+                logger.error(f"   - Organization admin approval required")
+                logger.error(f"   - Visibility set to non-PUBLIC")
+                logger.error(f"   Manual check: {post_url}")
+            else:
+                logger.info(f"✅ LinkedIn post verified as visible")
+                logger.info(f"   Lifecycle: {verification.get('lifecycle')}")
+                logger.info(f"   Visibility: {verification.get('visibility')}")
         else:
             post_url = "https://www.linkedin.com/feed/"
             logger.warning("⚠️ LinkedIn post created but no ID returned - using generic feed URL")
