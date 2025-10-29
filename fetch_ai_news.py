@@ -322,10 +322,48 @@ def summarize_with_openai(paper: ResearchPaper) -> Dict[str, Any]:
         logger.warning("OpenAI not available, using fallback")
         return summarize_fallback(paper)
     
-    # Initialize client
+    # Initialize client with explicit parameters (avoid environment proxy issues)
     try:
-        client = OpenAI(api_key=OPENAI_API_KEY)
-        logger.debug(f"OpenAI client initialized with model: {OPENAI_MODEL}")
+        # Temporarily clear proxy environment variables that might interfere
+        # GitHub Actions sometimes sets these which cause issues with OpenAI client
+        old_http_proxy = os.environ.pop('HTTP_PROXY', None)
+        old_https_proxy = os.environ.pop('HTTPS_PROXY', None)
+        old_http_proxy_lower = os.environ.pop('http_proxy', None)
+        old_https_proxy_lower = os.environ.pop('https_proxy', None)
+        
+        try:
+            # Create client with only supported parameters
+            # Newer versions of openai library don't support 'proxies' parameter
+            client = OpenAI(
+                api_key=OPENAI_API_KEY,
+                timeout=30.0,  # Explicit timeout
+                max_retries=2   # Retry on transient failures
+            )
+            logger.debug(f"OpenAI client initialized with model: {OPENAI_MODEL}")
+        finally:
+            # Restore proxy environment variables
+            if old_http_proxy:
+                os.environ['HTTP_PROXY'] = old_http_proxy
+            if old_https_proxy:
+                os.environ['HTTPS_PROXY'] = old_https_proxy
+            if old_http_proxy_lower:
+                os.environ['http_proxy'] = old_http_proxy_lower
+            if old_https_proxy_lower:
+                os.environ['https_proxy'] = old_https_proxy_lower
+                
+    except TypeError as e:
+        # Handle version incompatibility - try minimal initialization
+        if "proxies" in str(e) or "unexpected keyword argument" in str(e):
+            logger.warning(f"OpenAI client initialization failed with TypeError (likely version issue), using minimal params: {e}")
+            try:
+                client = OpenAI(api_key=OPENAI_API_KEY)
+                logger.debug("OpenAI client initialized with minimal parameters")
+            except Exception as e2:
+                logger.error(f"Failed to initialize OpenAI client even with minimal params: {e2}")
+                return summarize_fallback(paper)
+        else:
+            logger.error(f"Failed to initialize OpenAI client: {e}")
+            return summarize_fallback(paper)
     except Exception as e:
         logger.error(f"Failed to initialize OpenAI client: {e}")
         return summarize_fallback(paper)
