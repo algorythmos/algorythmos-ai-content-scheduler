@@ -339,12 +339,40 @@ def run(platform: str):
         
         for page in items:
             page_id = page["id"]
-            text = get_prop_text(page, "Tweet Content").strip()
+            
+            # Get platform-specific text
+            # For X: Use Title (contains X-optimized text ≤280 chars)
+            # For LinkedIn: Try LinkedIn Text property first, fallback to Title
+            if platform == 'x':
+                text = get_prop_text(page, "Title").strip()
+                logger.debug(f"Using Title for X post: {len(text)} chars")
+            elif platform == 'linkedin':
+                # Try LinkedIn Text property first
+                linkedin_text = get_prop_text(page, "LinkedIn Text").strip()
+                if linkedin_text:
+                    text = linkedin_text
+                    logger.debug(f"Using LinkedIn Text property: {len(text)} chars")
+                else:
+                    # Fallback to Title if LinkedIn Text is empty
+                    text = get_prop_text(page, "Title").strip()
+                    logger.debug(f"LinkedIn Text empty, using Title as fallback: {len(text)} chars")
+            
             media_urls = get_media_urls(page)
             
             if not text:
-                update_notion_status(page_id, "Failed", error_msg="Empty Tweet Content")
+                logger.warning(f"⚠️ Empty text for page {page_id[:8]}...")
+                update_notion_status(page_id, "Failed", error_msg=f"Empty text for {platform}")
                 continue
+            
+            # Validate character limits
+            if platform == 'x' and len(text) > 280:
+                logger.warning(f"⚠️ X text exceeds 280 chars ({len(text)}), truncating...")
+                text = text[:277] + "..."
+            elif platform == 'linkedin' and len(text) > 3000:
+                logger.warning(f"⚠️ LinkedIn text exceeds 3000 chars ({len(text)}), truncating...")
+                text = text[:2997] + "..."
+            
+            logger.info(f"📝 Posting to {platform.upper()} - Text length: {len(text)} chars")
             
             try:
                 # Post to platform
@@ -355,7 +383,7 @@ def run(platform: str):
                 
                 # Update Notion with success + URL
                 update_notion_status(page_id, "Posted", platform=platform, post_url=post_url)
-                logger.info(f"Successfully posted to {platform.upper()}: {page_id[:8]}...")
+                logger.info(f"✅ Successfully posted to {platform.upper()}: {page_id[:8]}...")
                 
                 # Rate limiting: polite pacing
                 time.sleep(2)

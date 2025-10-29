@@ -57,8 +57,11 @@ BOOST_KEYWORDS = [
 
 MAX_ARTICLE_AGE_HOURS = 48
 RECENCY_BOOST_HOURS = 24
-MAX_TWEET_LENGTH = 220
-SUMMARY_MAX_CHARS = 220
+
+# Platform-specific character limits
+MAX_X_CHARS = 280  # X (Twitter) character limit
+MAX_LINKEDIN_CHARS = 2000  # LinkedIn optimal limit (3000 max, 2000 best for engagement)
+SUMMARY_MAX_CHARS = 220  # Legacy fallback summary length
 
 # ----- Logging -----
 # Configure logging level from environment variable (default: INFO)
@@ -365,15 +368,18 @@ def score_items(items: List[NewsItem], notion_recent: Optional[Set[Tuple[str, st
 
 
 # ----- Summarization -----
-def summarize_with_openai(title: str, link: str, domain: str) -> str:
-    """Use OpenAI Chat Completions API v1 to generate a concise summary ≤220 chars."""
-    logger.debug(f"summarize_with_openai() called for: {title[:50]}...")
+def summarize_with_openai_dual(title: str, link: str, domain: str) -> Dict[str, Any]:
+    """
+    Use OpenAI to generate platform-specific summaries for X and LinkedIn.
+    Returns dict with: {"x_text": str, "linkedin_text": str, "char_counts": dict}
+    """
+    logger.debug(f"summarize_with_openai_dual() called for: {title[:50]}...")
     
     if not OPENAI_AVAILABLE or not OPENAI_API_KEY:
         logger.error("OpenAI not available or API key missing")
         raise RuntimeError("OpenAI not available")
     
-    # Initialize client - let OpenAI SDK handle environment
+    # Initialize client
     try:
         client = OpenAI(api_key=OPENAI_API_KEY)
         logger.debug(f"OpenAI client initialized with model: {OPENAI_MODEL}")
@@ -381,14 +387,40 @@ def summarize_with_openai(title: str, link: str, domain: str) -> str:
         logger.error(f"Failed to initialize OpenAI client: {e}", exc_info=True)
         raise
     
-    sys_msg = (
-        "You produce one-line, factual, neutral summaries (≤220 characters). "
-        "No hashtags, emojis, quotes, @mentions, or markdown. "
-        "End with '(domain)'."
-    )
-    user_msg = json.dumps({"title": title, "link": link, "domain": domain}, ensure_ascii=False)
+    # Enhanced prompt for dual-platform content generation
+    sys_msg = """You are an expert AI content curator for Algorythmos, a France-based AI automation firm. Summarize the following article for social posting. Generate TWO versions:
+
+1. **X (Twitter) Version**: ≤280 characters total (including spaces, emojis, hashtags). Make it punchy, engaging, with a hook, 1-2 key insights, a question or CTA, and end with the link. Use 1-2 relevant hashtags (#AI, #MachineLearning). Keep it concise and impactful.
+
+2. **LinkedIn Version**: ≤2000 characters total. Professional tone for AI professionals: Start with a compelling hook, include 3-5 bullet takeaways, brief analysis/implications for enterprises, CTA to discuss or connect, and the link. Use 2-3 hashtags. Include emojis sparingly for readability. Make it informative and valuable.
+
+Output STRICTLY as valid JSON (no extra text, no markdown code blocks):
+{
+  "x_text": "Full X post text here (≤280 chars)",
+  "linkedin_text": "Full LinkedIn post text here (≤2000 chars)",
+  "char_counts": {
+    "x": [exact character count],
+    "linkedin": [exact character count]
+  }
+}
+
+Guidelines:
+- Focus on AI innovation, business impact, and relevance to Algorythmos
+- Be original—rephrase insights, don't just copy
+- Ensure neutral, positive, professional tone
+- If article details are limited, infer key points logically
+- Do NOT include the URL in character counts (it will be appended separately)
+- Keep X version under 280 chars, LinkedIn version under 2000 chars"""
     
-    logger.debug(f"Sending request to OpenAI - Model: {OPENAI_MODEL}, User message length: {len(user_msg)} chars")
+    user_msg = f"""Article Details:
+Title: {title}
+Link: {link}
+Source: {domain}
+
+Generate engaging social media content for both X (Twitter) and LinkedIn."""
+    
+    logger.debug(f"Sending request to OpenAI - Model: {OPENAI_MODEL}")
+    logger.debug(f"User message: {user_msg[:200]}...")
     
     try:
         resp = client.chat.completions.create(
@@ -397,91 +429,148 @@ def summarize_with_openai(title: str, link: str, domain: str) -> str:
                 {"role": "system", "content": sys_msg},
                 {"role": "user", "content": user_msg},
             ],
-            temperature=0.2,
-            max_tokens=120,
+            temperature=0.7,  # Higher temperature for more creative content
+            max_tokens=1500,  # Increased for longer LinkedIn posts
+            response_format={"type": "json_object"}  # Force JSON response
         )
         
         logger.debug(f"OpenAI API response received - Usage: {resp.usage}")
-        text = (resp.choices[0].message.content or "").strip().replace("\n", " ")
-        logger.debug(f"Raw OpenAI response: {text}")
+        raw_response = (resp.choices[0].message.content or "").strip()
+        logger.debug(f"Raw OpenAI response: {raw_response[:500]}...")
         
-        # Hard cap + suffix enforcement
-        if len(text) > SUMMARY_MAX_CHARS:
-            text = text[: SUMMARY_MAX_CHARS - 1] + "…"
-            logger.debug(f"Truncated summary to {SUMMARY_MAX_CHARS} chars")
+        # Parse JSON response
+        try:
+            result = json.loads(raw_response)
+            logger.debug(f"Parsed JSON successfully - Keys: {list(result.keys())}")
+        except json.JSONDecodeError as e:
+            logger.error(f"Failed to parse OpenAI JSON response: {e}")
+            logger.error(f"Raw response: {raw_response}")
+            raise RuntimeError(f"Invalid JSON from OpenAI: {e}")
         
-        if not text.endswith(f"({domain})"):
-            suffix = f" ({domain})"
-            base = text[: max(0, SUMMARY_MAX_CHARS - len(suffix))].rstrip(" .,-–—")
-            text = base + suffix
-            logger.debug(f"Added domain suffix: {suffix}")
+        # Extract and validate texts
+        x_text = result.get("x_text", "").strip()
+        linkedin_text = result.get("linkedin_text", "").strip()
+        char_counts = result.get("char_counts", {})
         
-        logger.info(f"Generated OpenAI summary ({len(text)} chars): {text}")
-        return text
+        if not x_text or not linkedin_text:
+            logger.error(f"Missing texts in OpenAI response: x_text={bool(x_text)}, linkedin_text={bool(linkedin_text)}")
+            raise RuntimeError("OpenAI did not return both platform texts")
+        
+        # Validate and truncate if needed
+        original_x_len = len(x_text)
+        original_linkedin_len = len(linkedin_text)
+        
+        if len(x_text) > MAX_X_CHARS:
+            logger.warning(f"⚠️ X text exceeded limit ({len(x_text)} > {MAX_X_CHARS}), truncating...")
+            x_text = x_text[:MAX_X_CHARS - 3] + "..."
+        
+        if len(linkedin_text) > MAX_LINKEDIN_CHARS:
+            logger.warning(f"⚠️ LinkedIn text exceeded limit ({len(linkedin_text)} > {MAX_LINKEDIN_CHARS}), truncating...")
+            linkedin_text = linkedin_text[:MAX_LINKEDIN_CHARS - 3] + "..."
+        
+        logger.info(f"✅ Generated dual-platform content:")
+        logger.info(f"   🐦 X: {len(x_text)}/{MAX_X_CHARS} chars (original: {original_x_len})")
+        logger.info(f"   💼 LinkedIn: {len(linkedin_text)}/{MAX_LINKEDIN_CHARS} chars (original: {original_linkedin_len})")
+        logger.debug(f"X text: {x_text}")
+        logger.debug(f"LinkedIn text preview: {linkedin_text[:200]}...")
+        
+        return {
+            "x_text": x_text,
+            "linkedin_text": linkedin_text,
+            "char_counts": {
+                "x": len(x_text),
+                "linkedin": len(linkedin_text)
+            }
+        }
     
     except Exception as e:
         logger.error(f"OpenAI API error: {type(e).__name__}: {e}", exc_info=True)
         raise
 
 
-def summarize_fallback(item: NewsItem) -> str:
-    """Fallback summarization using heuristic approach."""
+def summarize_fallback(item: NewsItem) -> Dict[str, Any]:
+    """
+    Fallback summarization when OpenAI is unavailable.
+    Returns dict with x_text and linkedin_text.
+    """
     logger.debug(f"summarize_fallback() called for: {item.title[:50]}...")
     import re
     
     # Start with title
-    summary = item.title
+    base_summary = item.title
     
-    # Try to extract a key sentence from summary if available
+    # Try to extract key content from summary
     if item.summary:
-        # Remove HTML tags
         clean_summary = re.sub(r'<[^>]+>', '', item.summary)
-        # Clean up whitespace
         clean_summary = re.sub(r'\s+', ' ', clean_summary).strip()
         
         sentences = clean_summary.split(". ")
         for sentence in sentences:
             sentence = sentence.strip()
-            # Skip very short sentences
             if len(sentence) < 30:
                 continue
-            # Prefer sentences with AI keywords
             if any(kw.lower() in sentence.lower() for kw in BOOST_KEYWORDS):
-                summary = sentence
+                base_summary = sentence
                 break
         else:
-            # If no keyword match, use the first substantial sentence
             for sentence in sentences:
                 sentence = sentence.strip()
                 if len(sentence) >= 30:
-                    summary = sentence
+                    base_summary = sentence
                     break
     
-    # Add domain suffix
     domain_suffix = f" ({item.source_domain})"
     
-    # Truncate if needed to fit domain
-    max_summary_len = MAX_TWEET_LENGTH - len(domain_suffix)
-    if len(summary) > max_summary_len:
-        summary = summary[:max_summary_len - 3] + "..."
+    # Generate X version (short)
+    x_max_len = MAX_X_CHARS - len(domain_suffix) - len(" #AI ") - 30  # Reserve space for hashtag and link
+    if len(base_summary) > x_max_len:
+        x_text = base_summary[:x_max_len - 3] + "..."
+    else:
+        x_text = base_summary
+    x_text = f"{x_text} #AI {domain_suffix}"
     
-    summary = summary + domain_suffix
+    # Generate LinkedIn version (longer, more detailed)
+    linkedin_text = f"""📢 {item.title}
+
+{base_summary}
+
+This article from {item.source_domain} discusses important developments in AI and technology.
+
+What are your thoughts on this development? 
+
+#AI #Technology #Innovation
+{domain_suffix}"""
     
-    return summary
+    if len(linkedin_text) > MAX_LINKEDIN_CHARS:
+        linkedin_text = linkedin_text[:MAX_LINKEDIN_CHARS - 3] + "..."
+    
+    logger.info(f"Generated fallback summaries: X={len(x_text)} chars, LinkedIn={len(linkedin_text)} chars")
+    
+    return {
+        "x_text": x_text,
+        "linkedin_text": linkedin_text,
+        "char_counts": {
+            "x": len(x_text),
+            "linkedin": len(linkedin_text)
+        }
+    }
 
 
-def summarize_item(item: NewsItem) -> str:
-    """Generate summary using OpenAI if available, otherwise fallback."""
+def summarize_item(item: NewsItem) -> Dict[str, Any]:
+    """
+    Generate platform-specific summaries using OpenAI if available, otherwise fallback.
+    Returns dict with x_text, linkedin_text, and char_counts.
+    """
     domain = item.source_domain or "news"
     title = item.title.strip()
     link = item.link.strip()
     
     if OPENAI_API_KEY:
         try:
-            logger.info("Using OpenAI for summarization")
-            return summarize_with_openai(title, link, domain)
+            logger.info("🤖 Using OpenAI for dual-platform summarization")
+            return summarize_with_openai_dual(title, link, domain)
         except Exception as e:
-            logger.warning(f"OpenAI summarization failed, using fallback: {e}")
+            logger.warning(f"⚠️ OpenAI summarization failed, using fallback: {e}")
     
     logger.info("Using fallback summarization")
     return summarize_fallback(item)
@@ -504,35 +593,55 @@ def notion_client() -> Client:
         raise
 
 
-def notion_create_row(notion: Client, db_id: str, *, tweet: str,
+def notion_create_row(notion: Client, db_id: str, *, x_text: str, linkedin_text: str,
                       scheduled_time: datetime, media_url: Optional[str] = None,
                       status: str = "Scheduled", error: Optional[str] = None):
-    """Create a row in the Notion database."""
-    logger.debug(f"notion_create_row() called - Status: {status}, Tweet length: {len(tweet)}")
+    """
+    Create a row in the Notion database with platform-specific content.
     
+    Args:
+        x_text: Text for X (Twitter) post (≤280 chars)
+        linkedin_text: Text for LinkedIn post (≤2000 chars)
+    """
+    logger.debug(f"notion_create_row() called - Status: {status}, X: {len(x_text)} chars, LinkedIn: {len(linkedin_text)} chars")
+    
+    # Use X text for Title (backward compatibility with existing workflow)
     properties = {
-        "Title": {"title": [{"type": "text", "text": {"content": tweet}}]},
+        "Title": {"title": [{"type": "text", "text": {"content": x_text}}]},
         "Scheduled Time": {"date": {"start": scheduled_time.replace(microsecond=0).isoformat().replace('+00:00', 'Z')}},
         "Status": {"select": {"name": status}},
         "X URL": {"url": None},
         "LinkedIn URL": {"url": None},
     }
+    
+    # Add LinkedIn text as rich_text property (for platform-specific posting)
+    # Note: If "LinkedIn Text" property doesn't exist in Notion DB, this will be ignored
+    # The main.py script will use Title for X and can optionally use LinkedIn Text property
+    if linkedin_text and linkedin_text != x_text:
+        properties["LinkedIn Text"] = {
+            "rich_text": [{"type": "text", "text": {"content": linkedin_text[:2000]}}]  # Notion rich_text limit
+        }
+        logger.debug(f"Added LinkedIn-specific text property ({len(linkedin_text)} chars)")
+    
     if media_url:
         properties["Media URL"] = {"url": media_url}
         logger.debug(f"Added media URL: {media_url}")
+    
     if error:
         properties["Error Log"] = {"rich_text": [{"type": "text", "text": {"content": error[:1800]}}]}
         logger.debug(f"Added error log (truncated to 1800 chars)")
     
     logger.debug(f"Creating Notion page in database: {db_id[:8]}...")
+    logger.debug(f"Properties: {list(properties.keys())}")
+    
     try:
         response = notion.pages.create(parent={"database_id": db_id}, properties=properties)
         page_id = response.get("id", "unknown")
-        logger.info(f"Notion page created successfully - ID: {page_id}")
-        logger.debug(f"Notion response: {json.dumps(response, indent=2, default=str)}")
+        logger.info(f"✅ Notion page created successfully - ID: {page_id}")
+        logger.debug(f"Notion response keys: {list(response.keys())}")
         return response
     except Exception as e:
-        logger.error(f"Failed to create Notion page: {type(e).__name__}: {e}", exc_info=True)
+        logger.error(f"❌ Failed to create Notion page: {type(e).__name__}: {e}", exc_info=True)
         raise
 
 
@@ -541,9 +650,11 @@ def write_skipped_row():
     try:
         notion = notion_client()
         db_id = os.environ["NOTION_DB_ID"]
+        skipped_text = "(No fresh AI news today.) (system)"
         notion_create_row(
             notion, db_id,
-            tweet="(No fresh AI news today.) (system)",
+            x_text=skipped_text,
+            linkedin_text=skipped_text,
             scheduled_time=datetime.now(timezone.utc) - timedelta(minutes=5),
             status="Skipped",
         )
@@ -552,10 +663,20 @@ def write_skipped_row():
         logger.error("Failed to write Skipped row: %s", e)
 
 
-def create_notion_entry(summary: str, item: NewsItem, dry_run: bool = False) -> bool:
-    """Create a Notion database entry with Status=Scheduled."""
+def create_notion_entry(summaries: Dict[str, Any], item: NewsItem, dry_run: bool = False) -> bool:
+    """
+    Create a Notion database entry with Status=Scheduled and platform-specific content.
+    
+    Args:
+        summaries: Dict with x_text, linkedin_text, and char_counts
+        item: NewsItem object with article metadata
+        dry_run: If True, skip actual Notion API call
+    """
     if dry_run:
-        logger.info("DRY RUN: Skipping Notion entry creation")
+        logger.info("🧪 DRY RUN: Skipping Notion entry creation")
+        logger.info(f"   🐦 X text ({summaries['char_counts']['x']} chars): {summaries['x_text']}")
+        logger.info(f"   💼 LinkedIn text ({summaries['char_counts']['linkedin']} chars):")
+        logger.info(f"      {summaries['linkedin_text'][:200]}...")
         return True
     
     if not NOTION_TOKEN or not NOTION_DB_ID:
@@ -567,21 +688,25 @@ def create_notion_entry(summary: str, item: NewsItem, dry_run: bool = False) -> 
         notion = notion_client()
         notion_create_row(
             notion, NOTION_DB_ID,
-            tweet=summary,
+            x_text=summaries["x_text"],
+            linkedin_text=summaries["linkedin_text"],
             scheduled_time=scheduled_time,
             media_url=item.image_url,
             status="Scheduled",
         )
-        logger.info(f"Created Notion entry for: {item.title[:50]}...")
+        logger.info(f"✅ Created Notion entry for: {item.title[:50]}...")
+        logger.info(f"   📊 Char counts - X: {summaries['char_counts']['x']}, LinkedIn: {summaries['char_counts']['linkedin']}")
         return True
     except Exception as e:
-        logger.error(f"Failed to create Notion entry: {e}")
+        logger.error(f"❌ Failed to create Notion entry: {e}")
         # Try to create error entry
         try:
             notion = notion_client()
+            error_text = f"[ERROR] Failed to create entry for: {item.title[:100]}"
             notion_create_row(
                 notion, NOTION_DB_ID,
-                tweet=f"[ERROR] Failed to create entry for: {item.title[:100]}",
+                x_text=error_text,
+                linkedin_text=error_text,
                 scheduled_time=scheduled_time,
                 status="Failed",
                 error=str(e),
@@ -639,14 +764,18 @@ def main():
         logger.info(f"  Published: {top_item.published}")
         logger.info(f"  Source: {top_item.source_domain}")
         
-        # 4. Summarize
-        summary = summarize_item(top_item)
-        logger.info(f"Generated summary ({len(summary)} chars): {summary}")
+        # 4. Summarize with platform-specific content
+        summaries = summarize_item(top_item)
+        logger.info(f"📝 Generated platform-specific summaries:")
+        logger.info(f"   🐦 X: {summaries['char_counts']['x']} chars")
+        logger.info(f"   💼 LinkedIn: {summaries['char_counts']['linkedin']} chars")
         
         # 5. Dry-run output
         if args.dry_run:
             print(json.dumps({
-                "summary": summary,
+                "x_text": summaries["x_text"],
+                "linkedin_text": summaries["linkedin_text"],
+                "char_counts": summaries["char_counts"],
                 "title": top_item.title,
                 "link": top_item.link,
                 "published": top_item.published.isoformat() if top_item.published else None,
@@ -657,7 +786,7 @@ def main():
             return 0
         
         # 6. Create Notion entry
-        success = create_notion_entry(summary, top_item, dry_run=args.dry_run)
+        success = create_notion_entry(summaries, top_item, dry_run=args.dry_run)
         
         if success:
             logger.info("=== AI Content Fetcher Completed Successfully ===")
@@ -673,15 +802,18 @@ def main():
             try:
                 notion = Client(auth=NOTION_TOKEN)
                 scheduled_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace('+00:00', 'Z')
+                error_text = "[ERROR] AI Content Fetcher failed"
                 notion.pages.create(
                     parent={"database_id": NOTION_DB_ID},
                     properties={
                         "Title": {
-                            "title": [{"text": {"content": "[ERROR] AI Content Fetcher failed"}}]
+                            "title": [{"text": {"content": error_text}}]
                         },
                         "Status": {"select": {"name": "Failed"}},
                         "Error Log": {"rich_text": [{"text": {"content": str(e)[:1800]}}]},
-                        "Scheduled Time": {"date": {"start": scheduled_iso}}
+                        "Scheduled Time": {"date": {"start": scheduled_iso}},
+                        "X URL": {"url": None},
+                        "LinkedIn URL": {"url": None},
                     }
                 )
             except:
