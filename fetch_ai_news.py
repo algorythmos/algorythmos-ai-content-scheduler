@@ -491,6 +491,66 @@ def get_notion_client() -> Client:
         raise RuntimeError("NOTION_TOKEN must be set")
     return Client(auth=NOTION_TOKEN)
 
+def ensure_notion_schema():
+    """
+    Ensure all required properties exist in the Notion database.
+    Self-healing: automatically creates missing properties.
+    Idempotent: safe to call multiple times.
+    """
+    client = get_notion_client()
+    db_id = NOTION_DB_ID
+    
+    if not db_id:
+        logger.warning("NOTION_DB_ID not set, skipping schema validation")
+        return
+    
+    # Define required properties with their types
+    required_props = {
+        "arXiv ID": {"rich_text": {}},
+        "arXiv Link": {"url": {}},
+        "Authors": {"rich_text": {}},
+        "Categories": {"rich_text": {}},
+        "X Text": {"rich_text": {}},
+        "LinkedIn Text": {"rich_text": {}},
+        "Score": {"number": {"format": "number"}},
+        "Status": {"select": {"options": []}},  # Will use existing options
+        "Scheduled Time": {"date": {}},
+        "X URL": {"url": {}},
+        "LinkedIn URL": {"url": {}},
+    }
+
+    try:
+        logger.info("🔍 Checking Notion database schema...")
+        db = client.databases.retrieve(database_id=db_id)
+        existing = {name: prop for name, prop in db["properties"].items()}
+        
+        to_create = {}
+        for name, config in required_props.items():
+            prop_type = list(config.keys())[0]
+            
+            if name not in existing:
+                logger.info(f"   ➕ Missing property: {name} ({prop_type})")
+                to_create[name] = config
+            elif existing[name]["type"] != prop_type:
+                logger.warning(f"   ⚠️  Property {name} exists but wrong type: {existing[name]['type']} (expected {prop_type})")
+
+        if to_create:
+            logger.info(f"📝 Creating {len(to_create)} missing Notion properties...")
+            client.databases.update(
+                database_id=db_id,
+                properties=to_create
+            )
+            logger.info("✅ Notion schema updated successfully!")
+            for name in to_create.keys():
+                logger.info(f"   ✓ Created: {name}")
+        else:
+            logger.info("✅ Notion schema already up-to-date")
+            
+    except Exception as e:
+        logger.error(f"❌ Failed to update Notion schema: {e}")
+        logger.warning("Continuing with existing schema (may cause errors if properties missing)")
+        # Continue — system may still work if some props exist
+
 def get_recent_notion_content(client: Client, db_id: str, days: int = 7) -> Set[Tuple[str, str]]:
     """
     Query Notion for recent entries to prevent duplicates.
@@ -580,6 +640,10 @@ def main():
     logger.info("=== Algorythmos AI Research Digest v3.0 ===")
     logger.info(f"Dry run mode: {args.dry_run}")
     logger.info(f"arXiv categories: {', '.join(ARXIV_CATEGORIES)}")
+    
+    # Ensure Notion database schema is up-to-date (self-healing)
+    if NOTION_TOKEN and NOTION_DB_ID and not args.dry_run:
+        ensure_notion_schema()
     
     try:
         # 1. Fetch recent arXiv papers
