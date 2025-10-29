@@ -25,25 +25,44 @@ jobs:
           && github.event.workflow_run.conclusion == 'success')
 
     steps:
-      - name: Checkout repository
+      - name: 📦 Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.11
+      - name: ✅ Repository checked out
+        run: echo "✅ Repository checked out successfully"
+
+      - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
           cache: "pip"
 
-      - name: Install dependencies
-        run: pip install -r requirements.txt
+      - name: ✅ Python environment ready
+        run: |
+          echo "✅ Python 3.11 environment set up"
+          echo "📍 Python version: $(python --version)"
 
-      - name: Verify content ready for publication
+      - name: 📚 Install dependencies
+        run: |
+          echo "📥 Installing Python dependencies from requirements.txt..."
+          pip install -r requirements.txt
+          echo "✅ Dependencies installed successfully"
+          echo "📦 Installed packages:"
+          pip list
+
+      - name: 🔍 Verify content ready for publication
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
-        run: python check_ready_to_post.py || { echo "No Scheduled rows ready. Skipping."; exit 0; }
+          LOG_LEVEL: INFO
+        run: |
+          echo "🔍 Checking Notion for scheduled content..."
+          echo "📊 Notion DB ID: ${{ secrets.NOTION_DB_ID }}"
+          echo "🔑 Notion Token: ${NOTION_TOKEN:0:20}..."
+          python check_ready_to_post.py || { echo "⚠️ No Scheduled rows ready. Skipping."; exit 0; }
+          echo "✅ Content verification complete"
 
-      - name: Publish to X (Twitter)
+      - name: 🐦 Publish to X (Twitter)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
@@ -52,14 +71,36 @@ jobs:
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python main.py --platform x
+          LOG_LEVEL: INFO
+        run: |
+          echo "🐦 Starting X (Twitter) publication..."
+          echo "🔑 X API Key: ${X_API_KEY:0:20}..."
+          echo "🔑 X Access Token: ${X_ACCESS_TOKEN:0:20}..."
+          python main.py --platform x
+          if [ $? -eq 0 ]; then
+            echo "✅ Successfully published to X"
+          else
+            echo "❌ Failed to publish to X"
+            exit 1
+          fi
 
-      - name: Publish to LinkedIn
-        if: ${{ secrets.LINKEDIN_ACCESS_TOKEN != '' }}
+      - name: 💼 Publish to LinkedIn
+        if: secrets.LINKEDIN_ACCESS_TOKEN != ''
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
           LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
           LINKEDIN_ORG_ID: ${{ secrets.LINKEDIN_ORG_ID }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python main.py --platform linkedin
+          LOG_LEVEL: INFO
+        run: |
+          echo "💼 Starting LinkedIn publication..."
+          echo "🔑 LinkedIn Access Token: ${LINKEDIN_ACCESS_TOKEN:0:20}..."
+          echo "🏢 LinkedIn Org ID: ${{ secrets.LINKEDIN_ORG_ID }}"
+          python main.py --platform linkedin
+          if [ $? -eq 0 ]; then
+            echo "✅ Successfully published to LinkedIn"
+          else
+            echo "❌ Failed to publish to LinkedIn"
+            exit 1
+          fi

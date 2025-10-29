@@ -1,6 +1,7 @@
 import os
 import sys
 import time
+import json
 import logging
 import argparse
 from datetime import datetime, timezone
@@ -32,15 +33,25 @@ LINKEDIN_ACCESS_TOKEN = os.getenv("LINKEDIN_ACCESS_TOKEN")
 LINKEDIN_ORG_ID = os.getenv("LINKEDIN_ORG_ID", "")  # Optional: use user posts if not set
 
 # ----- Logging -----
+# Configure logging level from environment variable (default: INFO)
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+numeric_level = getattr(logging, log_level, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    level=numeric_level,
+    format="%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger(__name__)
+logger.debug(f"Logging initialized at level: {log_level}")
 
 # ----- Clients -----
-notion = Client(auth=NOTION_TOKEN)
+try:
+    notion = Client(auth=NOTION_TOKEN)
+    logger.debug("Notion client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Notion client: {e}", exc_info=True)
+    raise
 
 # ----- Helpers -----
 def iso(dt_obj: datetime) -> str:
@@ -107,50 +118,71 @@ def post_to_x(text: str, media_urls: List[str] = None) -> str:
     """
     Post to X (Twitter) and return the tweet URL.
     """
+    logger.debug(f"post_to_x() called - Text length: {len(text)}, Media URLs: {len(media_urls) if media_urls else 0}")
+    
     if not all([X_API_KEY, X_API_SECRET, X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET]):
+        logger.error("Missing X API credentials")
         raise RuntimeError("Missing X API credentials")
     
+    logger.debug("X API credentials verified")
+    
     # Create Twitter client
-    client = tweepy.Client(
-        consumer_key=X_API_KEY,
-        consumer_secret=X_API_SECRET,
-        access_token=X_ACCESS_TOKEN,
-        access_token_secret=X_ACCESS_TOKEN_SECRET
-    )
+    try:
+        client = tweepy.Client(
+            consumer_key=X_API_KEY,
+            consumer_secret=X_API_SECRET,
+            access_token=X_ACCESS_TOKEN,
+            access_token_secret=X_ACCESS_TOKEN_SECRET
+        )
+        logger.debug("Tweepy client created successfully")
+    except Exception as e:
+        logger.error(f"Failed to create Tweepy client: {e}", exc_info=True)
+        raise
     
     media_ids = []
     
     # Upload media if provided (requires API v1.1)
     if media_urls:
+        logger.info(f"Uploading {len(media_urls)} media files to X")
         auth = tweepy.OAuth1UserHandler(
             X_API_KEY, X_API_SECRET,
             X_ACCESS_TOKEN, X_ACCESS_TOKEN_SECRET
         )
         api = tweepy.API(auth)
         
-        for media_url in media_urls[:4]:  # Twitter allows max 4 images
+        for i, media_url in enumerate(media_urls[:4], 1):  # Twitter allows max 4 images
             try:
-                logger.info(f"Downloading media from {media_url}")
+                logger.debug(f"Downloading media {i}/{len(media_urls[:4])} from {media_url}")
                 response = requests.get(media_url, timeout=10)
                 response.raise_for_status()
+                logger.debug(f"Downloaded {len(response.content)} bytes")
                 
                 # Upload to Twitter
+                logger.debug(f"Uploading media to X API")
                 media = api.media_upload(filename="temp.jpg", file=io.BytesIO(response.content))
                 media_ids.append(media.media_id)
-                logger.info(f"Uploaded media: {media.media_id}")
+                logger.info(f"✅ Uploaded media {i}: ID {media.media_id}")
             except Exception as e:
-                logger.warning(f"Failed to upload media {media_url}: {e}")
+                logger.warning(f"⚠️ Failed to upload media {media_url}: {type(e).__name__}: {e}", exc_info=True)
     
     # Post tweet
-    response = client.create_tweet(text=text, media_ids=media_ids if media_ids else None)
-    tweet_id = response.data['id']
+    logger.info(f"🐦 Posting tweet to X (text length: {len(text)}, media count: {len(media_ids)})")
+    logger.debug(f"Tweet text: {text}")
     
-    # Get username for URL (use a default or fetch from API)
-    # For simplicity, we'll construct URL with generic path
-    tweet_url = f"https://x.com/i/web/status/{tweet_id}"
-    
-    logger.info(f"Posted to X: {tweet_url}")
-    return tweet_url
+    try:
+        response = client.create_tweet(text=text, media_ids=media_ids if media_ids else None)
+        tweet_id = response.data['id']
+        logger.debug(f"X API response: {response}")
+        
+        # Get username for URL (use a default or fetch from API)
+        # For simplicity, we'll construct URL with generic path
+        tweet_url = f"https://x.com/i/web/status/{tweet_id}"
+        
+        logger.info(f"✅ Posted to X successfully: {tweet_url}")
+        return tweet_url
+    except Exception as e:
+        logger.error(f"❌ Failed to post to X: {type(e).__name__}: {e}", exc_info=True)
+        raise
 
 # ----- LinkedIn Posting -----
 def post_to_linkedin(text: str, media_urls: List[str] = None) -> str:
@@ -158,11 +190,16 @@ def post_to_linkedin(text: str, media_urls: List[str] = None) -> str:
     Post to LinkedIn and return the post URL.
     Supports both user posts and organization posts.
     """
+    logger.debug(f"post_to_linkedin() called - Text length: {len(text)}, Media URLs: {len(media_urls) if media_urls else 0}")
+    
     if not LINKEDIN_ACCESS_TOKEN:
+        logger.error("Missing LinkedIn access token")
         raise RuntimeError("Missing LinkedIn access token")
     
+    logger.debug("LinkedIn access token verified")
+    
     headers = {
-        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}",
+        "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN[:20]}...",  # Log only first 20 chars
         "Content-Type": "application/json",
         "X-Restli-Protocol-Version": "2.0.0"
     }
@@ -170,19 +207,31 @@ def post_to_linkedin(text: str, media_urls: List[str] = None) -> str:
     # Determine author (organization or user)
     if LINKEDIN_ORG_ID:
         author = f"urn:li:organization:{LINKEDIN_ORG_ID}"
+        logger.debug(f"Using organization author: {author}")
     else:
         # Get user's profile to get their URN
+        logger.debug("Fetching LinkedIn user profile to get author URN")
         try:
             profile_response = requests.get(
                 "https://api.linkedin.com/v2/me",
-                headers=headers,
+                headers={**headers, "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"},  # Use full token for actual request
                 timeout=10
             )
+            logger.debug(f"LinkedIn profile API response status: {profile_response.status_code}")
             profile_response.raise_for_status()
-            user_id = profile_response.json().get("id")
+            
+            user_data = profile_response.json()
+            user_id = user_data.get("id")
+            logger.debug(f"LinkedIn profile response: {json.dumps(user_data, indent=2)}")
+            
+            if not user_id:
+                logger.error("LinkedIn profile response missing 'id' field")
+                raise RuntimeError("Could not get user ID from LinkedIn profile")
+            
             author = f"urn:li:person:{user_id}"
+            logger.debug(f"Using user author: {author}")
         except Exception as e:
-            logger.error(f"Failed to get LinkedIn user profile: {e}")
+            logger.error(f"Failed to get LinkedIn user profile: {type(e).__name__}: {e}", exc_info=True)
             raise RuntimeError("Could not determine LinkedIn author URN")
     
     # Build post payload
@@ -200,23 +249,34 @@ def post_to_linkedin(text: str, media_urls: List[str] = None) -> str:
         }
     }
     
+    logger.debug(f"LinkedIn post payload: {json.dumps(payload, indent=2)}")
+    
     # If media URLs provided, upload and attach (simplified - LinkedIn media upload is complex)
     # For now, we'll just post text. Full media support requires multi-step upload process
     if media_urls:
-        logger.warning("LinkedIn media upload not fully implemented yet - posting text only")
+        logger.warning("⚠️ LinkedIn media upload not fully implemented yet - posting text only")
     
     # Post to LinkedIn
+    logger.info(f"💼 Posting to LinkedIn (text length: {len(text)})")
+    logger.debug(f"LinkedIn text: {text}")
+    
     try:
         response = requests.post(
             "https://api.linkedin.com/v2/ugcPosts",
-            headers=headers,
+            headers={**headers, "Authorization": f"Bearer {LINKEDIN_ACCESS_TOKEN}"},  # Use full token
             json=payload,
             timeout=15
         )
+        
+        logger.debug(f"LinkedIn API response status: {response.status_code}")
+        logger.debug(f"LinkedIn API response headers: {dict(response.headers)}")
+        
         response.raise_for_status()
         
         # Extract post ID from response
         post_data = response.json()
+        logger.debug(f"LinkedIn post response: {json.dumps(post_data, indent=2)}")
+        
         post_id = post_data.get("id", "")
         
         # Convert URN to URL
@@ -224,15 +284,21 @@ def post_to_linkedin(text: str, media_urls: List[str] = None) -> str:
         # URL format: https://www.linkedin.com/feed/update/urn:li:share:1234567890
         if post_id:
             post_url = f"https://www.linkedin.com/feed/update/{post_id}"
+            logger.info(f"✅ Posted to LinkedIn successfully: {post_url}")
         else:
             post_url = "https://www.linkedin.com/feed/"
+            logger.warning("⚠️ LinkedIn post created but no ID returned - using generic feed URL")
         
-        logger.info(f"Posted to LinkedIn: {post_url}")
         return post_url
     
     except requests.exceptions.HTTPError as e:
-        logger.error(f"LinkedIn API error: {e}")
-        logger.error(f"Response: {e.response.text if e.response else 'No response'}")
+        logger.error(f"❌ LinkedIn API HTTP error: {e}")
+        if e.response:
+            logger.error(f"Response status: {e.response.status_code}")
+            logger.error(f"Response body: {e.response.text}")
+        raise
+    except Exception as e:
+        logger.error(f"❌ Failed to post to LinkedIn: {type(e).__name__}: {e}", exc_info=True)
         raise
 
 # ----- Main Posting Logic -----

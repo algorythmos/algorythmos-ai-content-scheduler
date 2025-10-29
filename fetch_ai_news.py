@@ -61,12 +61,17 @@ MAX_TWEET_LENGTH = 220
 SUMMARY_MAX_CHARS = 220
 
 # ----- Logging -----
+# Configure logging level from environment variable (default: INFO)
+log_level = os.getenv("LOG_LEVEL", "INFO").upper()
+numeric_level = getattr(logging, log_level, logging.INFO)
+
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s [%(levelname)s] %(message)s",
+    level=numeric_level,
+    format="%(asctime)s [%(levelname)s] [%(filename)s:%(lineno)d] %(message)s",
     datefmt="%Y-%m-%d %H:%M:%S"
 )
 logger = logging.getLogger(__name__)
+logger.debug(f"Logging initialized at level: {log_level}")
 
 # ----- Data Models -----
 class NewsItem:
@@ -362,17 +367,28 @@ def score_items(items: List[NewsItem], notion_recent: Optional[Set[Tuple[str, st
 # ----- Summarization -----
 def summarize_with_openai(title: str, link: str, domain: str) -> str:
     """Use OpenAI Chat Completions API v1 to generate a concise summary ≤220 chars."""
+    logger.debug(f"summarize_with_openai() called for: {title[:50]}...")
+    
     if not OPENAI_AVAILABLE or not OPENAI_API_KEY:
+        logger.error("OpenAI not available or API key missing")
         raise RuntimeError("OpenAI not available")
     
     # Initialize client - let OpenAI SDK handle environment
-    client = OpenAI(api_key=OPENAI_API_KEY)
+    try:
+        client = OpenAI(api_key=OPENAI_API_KEY)
+        logger.debug(f"OpenAI client initialized with model: {OPENAI_MODEL}")
+    except Exception as e:
+        logger.error(f"Failed to initialize OpenAI client: {e}", exc_info=True)
+        raise
+    
     sys_msg = (
         "You produce one-line, factual, neutral summaries (≤220 characters). "
         "No hashtags, emojis, quotes, @mentions, or markdown. "
         "End with '(domain)'."
     )
     user_msg = json.dumps({"title": title, "link": link, "domain": domain}, ensure_ascii=False)
+    
+    logger.debug(f"Sending request to OpenAI - Model: {OPENAI_MODEL}, User message length: {len(user_msg)} chars")
     
     try:
         resp = client.chat.completions.create(
@@ -384,24 +400,33 @@ def summarize_with_openai(title: str, link: str, domain: str) -> str:
             temperature=0.2,
             max_tokens=120,
         )
+        
+        logger.debug(f"OpenAI API response received - Usage: {resp.usage}")
         text = (resp.choices[0].message.content or "").strip().replace("\n", " ")
+        logger.debug(f"Raw OpenAI response: {text}")
         
         # Hard cap + suffix enforcement
         if len(text) > SUMMARY_MAX_CHARS:
             text = text[: SUMMARY_MAX_CHARS - 1] + "…"
+            logger.debug(f"Truncated summary to {SUMMARY_MAX_CHARS} chars")
+        
         if not text.endswith(f"({domain})"):
             suffix = f" ({domain})"
             base = text[: max(0, SUMMARY_MAX_CHARS - len(suffix))].rstrip(" .,-–—")
             text = base + suffix
+            logger.debug(f"Added domain suffix: {suffix}")
+        
+        logger.info(f"Generated OpenAI summary ({len(text)} chars): {text}")
         return text
     
     except Exception as e:
-        logger.error(f"OpenAI API error: {e}")
+        logger.error(f"OpenAI API error: {type(e).__name__}: {e}", exc_info=True)
         raise
 
 
 def summarize_fallback(item: NewsItem) -> str:
     """Fallback summarization using heuristic approach."""
+    logger.debug(f"summarize_fallback() called for: {item.title[:50]}...")
     import re
     
     # Start with title
@@ -465,15 +490,26 @@ def summarize_item(item: NewsItem) -> str:
 # ----- Notion Integration -----
 def notion_client() -> Client:
     """Create a Notion client instance."""
+    logger.debug("Creating Notion client")
     if not NOTION_TOKEN:
+        logger.error("NOTION_TOKEN environment variable is not set")
         raise RuntimeError("NOTION_TOKEN must be set")
-    return Client(auth=NOTION_TOKEN)
+    
+    try:
+        client = Client(auth=NOTION_TOKEN)
+        logger.debug("Notion client created successfully")
+        return client
+    except Exception as e:
+        logger.error(f"Failed to create Notion client: {e}", exc_info=True)
+        raise
 
 
 def notion_create_row(notion: Client, db_id: str, *, tweet: str,
                       scheduled_time: datetime, media_url: Optional[str] = None,
                       status: str = "Scheduled", error: Optional[str] = None):
     """Create a row in the Notion database."""
+    logger.debug(f"notion_create_row() called - Status: {status}, Tweet length: {len(tweet)}")
+    
     properties = {
         "Title": {"title": [{"type": "text", "text": {"content": tweet}}]},
         "Scheduled Time": {"date": {"start": scheduled_time.replace(microsecond=0).isoformat().replace('+00:00', 'Z')}},
@@ -483,10 +519,21 @@ def notion_create_row(notion: Client, db_id: str, *, tweet: str,
     }
     if media_url:
         properties["Media URL"] = {"url": media_url}
+        logger.debug(f"Added media URL: {media_url}")
     if error:
         properties["Error Log"] = {"rich_text": [{"type": "text", "text": {"content": error[:1800]}}]}
+        logger.debug(f"Added error log (truncated to 1800 chars)")
     
-    return notion.pages.create(parent={"database_id": db_id}, properties=properties)
+    logger.debug(f"Creating Notion page in database: {db_id[:8]}...")
+    try:
+        response = notion.pages.create(parent={"database_id": db_id}, properties=properties)
+        page_id = response.get("id", "unknown")
+        logger.info(f"Notion page created successfully - ID: {page_id}")
+        logger.debug(f"Notion response: {json.dumps(response, indent=2, default=str)}")
+        return response
+    except Exception as e:
+        logger.error(f"Failed to create Notion page: {type(e).__name__}: {e}", exc_info=True)
+        raise
 
 
 def write_skipped_row():
