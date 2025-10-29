@@ -555,6 +555,18 @@ def run(platform: str):
         for page in items:
             page_id = page["id"]
             
+            # Check if already posted to this platform
+            if platform == 'x':
+                existing_url = get_prop_url(page, "Tweet URL")
+                if existing_url:
+                    logger.info(f"⏭️  Skipping {page_id[:8]}... - already posted to X: {existing_url}")
+                    continue
+            elif platform == 'linkedin':
+                existing_url = get_prop_url(page, "LinkedIn URL")
+                if existing_url:
+                    logger.info(f"⏭️  Skipping {page_id[:8]}... - already posted to LinkedIn: {existing_url}")
+                    continue
+            
             # Get platform-specific text
             # For X: Use X Text property (≤280 chars), fallback to Title
             # For LinkedIn: Use LinkedIn Text property, fallback to Title
@@ -601,9 +613,17 @@ def run(platform: str):
                 elif platform == 'linkedin':
                     post_url = post_to_linkedin(text, media_urls)
                 
-                # Update Notion with success + URL
-                update_notion_status(page_id, "Posted", platform=platform, post_url=post_url)
-                logger.info(f"✅ Successfully posted to {platform.upper()}: {page_id[:8]}...")
+                # Check if other platform already posted
+                other_platform_posted = False
+                if platform == 'x':
+                    other_platform_posted = bool(get_prop_url(page, "LinkedIn URL"))
+                elif platform == 'linkedin':
+                    other_platform_posted = bool(get_prop_url(page, "Tweet URL"))
+                
+                # Only mark as "Posted" if both platforms are done, otherwise keep "Ready to Post"
+                new_status = "Posted" if other_platform_posted else "Ready to Post"
+                update_notion_status(page_id, new_status, platform=platform, post_url=post_url)
+                logger.info(f"✅ Successfully posted to {platform.upper()}: {page_id[:8]}... (status: {new_status})")
                 
                 # Rate limiting: polite pacing
                 time.sleep(2)
