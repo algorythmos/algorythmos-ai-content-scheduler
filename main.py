@@ -627,14 +627,19 @@ if __name__ == "__main__":
     parser.add_argument(
         "--platform",
         type=str,
-        choices=["x", "linkedin"],
+        choices=["x", "linkedin", "both"],
         required=True,
-        help="Platform to post to: 'x' or 'linkedin'"
+        help="Platform to post to: 'x', 'linkedin', or 'both'"
     )
     args = parser.parse_args()
     
     try:
-        run(args.platform)
+        if args.platform == "both":
+            logger.info("=== Posting to BOTH platforms ===")
+            run("x")
+            run("linkedin")
+        else:
+            run(args.platform)
     except Exception as e:
-        logger.exception(f"Fatal error in {args.platform.upper()} poster")
+        logger.exception(f"Fatal error in poster")
         sys.exit(1)
