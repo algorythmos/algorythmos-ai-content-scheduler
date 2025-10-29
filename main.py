@@ -60,18 +60,38 @@ def iso(dt_obj: datetime) -> str:
 
 def notion_query_scheduled(db_id: str) -> List[Dict[str, Any]]:
     """
-    Fetch pages where Status = Scheduled and Scheduled Time <= now (UTC).
+    Fetch pages where:
+    1. Status = "Ready to Post" (immediate), OR
+    2. Status = "Scheduled" and Scheduled Time <= now (time-based)
     """
-    return notion.databases.query(
-        database_id=db_id,
-        filter={
-            "and": [
-                {"property": "Status", "select": {"equals": "Scheduled"}},
-                {"property": "Scheduled Time", "date": {"before": iso(UTC_NOW)}},
-            ]
-        },
-        sorts=[{"property": "Scheduled Time", "direction": "ascending"}],
-    )["results"]
+    # Query both "Ready to Post" and overdue "Scheduled" entries
+    try:
+        # First: Get "Ready to Post" entries
+        ready_results = notion.databases.query(
+            database_id=db_id,
+            filter={"property": "Status", "select": {"equals": "Ready to Post"}},
+            sorts=[{"property": "Scheduled Time", "direction": "ascending"}],
+        ).get("results", [])
+        
+        # Second: Get overdue "Scheduled" entries
+        scheduled_results = notion.databases.query(
+            database_id=db_id,
+            filter={
+                "and": [
+                    {"property": "Status", "select": {"equals": "Scheduled"}},
+                    {"property": "Scheduled Time", "date": {"before": iso(UTC_NOW)}},
+                ]
+            },
+            sorts=[{"property": "Scheduled Time", "direction": "ascending"}],
+        ).get("results", [])
+        
+        # Combine and deduplicate by page ID
+        all_pages = {p["id"]: p for p in ready_results + scheduled_results}
+        return list(all_pages.values())
+    
+    except Exception as e:
+        logger.error(f"Failed to query Notion: {e}")
+        return []
 
 def get_prop_text(p: Dict[str, Any], name: str) -> str:
     val = p["properties"].get(name)

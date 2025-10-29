@@ -621,7 +621,23 @@ def notion_create_row(paper: ResearchPaper, summaries: Dict[str, Any]) -> Dict[s
             parent={"database_id": NOTION_DB_ID},
             properties=properties
         )
+        page_id = response["id"]
         logger.info(f"✅ Created Notion entry for paper: {paper.arxiv_id}")
+        
+        # Auto-set to "Ready to Post" for immediate publishing
+        # Only set to "Ready" if scheduled time has passed (immediate posting)
+        current_time = datetime.now(timezone.utc)
+        if current_time >= scheduled_time:
+            try:
+                client.pages.update(
+                    page_id=page_id,
+                    properties={"Status": {"select": {"name": "Ready to Post"}}}
+                )
+                logger.info(f"✅ Auto-set page {page_id[:8]}... to 'Ready to Post' for immediate publishing")
+            except Exception as e:
+                logger.warning(f"⚠️ Failed to auto-set status to Ready: {e}")
+                logger.info(f"Entry remains as 'Scheduled' - will need manual update or time-based trigger")
+        
         return response
     except Exception as e:
         logger.error(f"❌ Failed to create Notion entry: {e}")
