@@ -1,9 +1,10 @@
 name: 📰 Algorythmos Content Aggregator
 
 on:
-  # Run at 09:45 UTC (15 minutes before daily posting at 10 AM Paris)
+  # Run 15 minutes before daily posting (09:45 AM Paris time)
   schedule:
-    - cron: "45 9 * * *"  # 09:45 UTC daily
+    - cron: "45 7 * 3-10 *"     # 07:45 UTC = 09:45 AM CEST (Mar-Oct)
+    - cron: "45 8 * 11,12,1,2 *" # 08:45 UTC = 09:45 AM CET (Nov-Feb)
   workflow_dispatch:
     inputs:
       dry_run:

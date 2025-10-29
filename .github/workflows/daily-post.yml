@@ -1,11 +1,10 @@
 name: 📅 Daily AI Research Post (10 AM Paris)
 
 on:
-  # 10:00 AM Paris = 08:00 UTC (CET winter) / 09:00 UTC (CEST summer)
-  # GitHub Actions uses UTC, so we use 08:00 UTC which maps to 10:00 AM Paris in winter
-  # During summer (CEST), this will be 10:00 AM CEST
+  # 10:00 AM Paris time year-round (handles CET/CEST automatically)
   schedule:
-    - cron: "0 8 * * *"  # 10:00 AM Paris time (UTC+1 in winter, UTC+2 in summer)
+    - cron: "0 8 * 3-10 *"     # 08:00 UTC = 10:00 AM CEST (Mar-Oct)
+    - cron: "0 9 * 11,12,1,2 *" # 09:00 UTC = 10:00 AM CET (Nov-Feb)
   workflow_dispatch:
 
 concurrency:
