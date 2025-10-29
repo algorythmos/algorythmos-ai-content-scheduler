@@ -134,9 +134,17 @@ def update_notion_status(page_id: str, status: str, platform: str = None,
         full_error.append(f"⚠️ Visibility: {visibility_warning}")
     
     if full_error:
-        properties["Error Message"] = {"rich_text": [{"text": {"content": "\n".join(full_error)[:1800]}}]}
+        # Only try to set Error Message if it exists in the database
+        try:
+            properties["Error Message"] = {"rich_text": [{"text": {"content": "\n".join(full_error)[:1800]}}]}
+        except Exception:
+            # Silently skip if Error Message property doesn't exist
+            pass
     else:
-        properties["Error Message"] = {"rich_text": []}
+        try:
+            properties["Error Message"] = {"rich_text": []}
+        except Exception:
+            pass
     
     notion.pages.update(page_id, properties=properties)
     

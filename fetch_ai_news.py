@@ -555,6 +555,7 @@ def ensure_notion_schema():
         "Scheduled Time": {"date": {}},
         "X URL": {"url": {}},
         "LinkedIn URL": {"url": {}},
+        "Error Message": {"rich_text": {}},  # For tracking posting errors
     }
 
     try:
