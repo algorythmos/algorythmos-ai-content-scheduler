@@ -1,357 +1,229 @@
-# Algorythmos AI Content Scheduler - Complete Setup Guide
+# 🚀 Algorythmos AI Content Scheduler - Setup Guide
 
-## 🎯 Overview
+## Current Status
 
-This guide walks you through setting up the **Algorythmos AI Content Scheduler** from scratch. You'll configure:
-- ✅ Notion database with required properties
-- ✅ X (Twitter) API credentials
-- ✅ LinkedIn API credentials
-- ✅ OpenAI API key
-- ✅ GitHub Secrets
-- ✅ Testing & deployment
+✅ **Code Complete** - All features implemented and tested
+✅ **Documentation Complete** - README with full instructions
+✅ **Repository Configured** - 9/10 GitHub Secrets added
+⚠️ **Action Required** - Add `GH_PAT` secret to enable automatic workflow chaining
 
 ---
 
-## 📋 Prerequisites
+## 🎯 Final Setup Step: Add GH_PAT
 
-- GitHub account (free tier is sufficient)
-- Notion account (free tier is sufficient)
-- X (Twitter) Developer account
-- LinkedIn Developer account
-- OpenAI API account (optional but recommended)
+The workflow chaining feature is fully implemented but requires a GitHub Personal Access Token (PAT) with `workflow` scope to function.
 
----
+### Why GH_PAT is Required
 
-## Step 1: Create Notion Database
+GitHub's default `GITHUB_TOKEN` cannot trigger other workflows due to security restrictions. This is intentional to prevent recursive workflow triggers. To enable the **Content Aggregator** to automatically trigger the **Social Publisher**, you need a PAT.
 
-### 1.1 Create Integration
+### Step-by-Step Instructions
 
-1. Go to [Notion Integrations](https://www.notion.so/my-integrations)
-2. Click **"+ New integration"**
-3. Name: `Algorythmos Content Scheduler`
-4. Select your workspace
-5. Copy the **Internal Integration Token** (starts with `secret_`)
-6. Save this as `NOTION_TOKEN`
+#### 1. Generate Personal Access Token
 
-### 1.2 Create Database
+1. **Open GitHub Token Generator:**
+   ```
+   https://github.com/settings/tokens/new
+   ```
 
-1. Create a new page in Notion
-2. Add a **Database - Full page**
-3. Name it: `AI Content Queue`
+2. **Configure Token:**
+   - **Note:** `Algorythmos Content Scheduler - Workflow Trigger`
+   - **Expiration:** `90 days` (or `No expiration` if you want to set it and forget it)
+   - **Scopes:** Check **ONLY** `workflow` (no other scopes needed)
 
-### 1.3 Add Required Properties
+3. **Generate and Copy:**
+   - Click **"Generate token"**
+   - Copy the token (starts with `ghp_...`)
+   - ⚠️ **Important:** Save it somewhere safe! You won't be able to see it again.
 
-Add these properties to your database (exact names are important):
+#### 2. Add Token to Repository Secrets
 
-| Property Name | Type | Description |
-|--------------|------|-------------|
-| `Tweet Content` | Title | The text to post |
-| `Status` | Select | Options: `Scheduled`, `Posted`, `Failed`, `Skipped` |
-| `Scheduled Time` | Date | When to post (with time) |
-| `Posted Time` | Date | When it was posted |
-| `Tweet URL` | URL | Link to posted tweet |
-| `LinkedIn URL` | URL | Link to posted LinkedIn post |
-| `Media URLs` | Text | URLs of images/media to attach |
-| `Error Message` | Text | Error details if failed |
-| `Thread Group ID` | Text | For threading (optional) |
-| `Thread Position` | Number | Position in thread (optional) |
+1. **Navigate to Secrets Settings:**
+   ```
+   https://github.com/algorythmos/algorythmos-ai-content-scheduler/settings/secrets/actions
+   ```
 
-### 1.4 Connect Integration to Database
+2. **Add New Secret:**
+   - Click **"New repository secret"**
+   - **Name:** `GH_PAT`
+   - **Value:** Paste the token you copied (e.g., `ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx`)
+   - Click **"Add secret"**
 
-1. Click the **•••** menu in your database
-2. Select **"Connections"**
-3. Add your **Algorythmos Content Scheduler** integration
+3. **Verify:**
+   - You should now see `GH_PAT` in your list of secrets
+   - Total secrets: **10/10** ✅
 
-### 1.5 Get Database ID
+#### 3. Test the Workflow
 
-From your database URL:
+1. **Navigate to Actions:**
+   ```
+   https://github.com/algorythmos/algorythmos-ai-content-scheduler/actions
+   ```
+
+2. **Manually Trigger Content Aggregator:**
+   - Click **"📰 Algorythmos Content Aggregator"**
+   - Click **"Run workflow"** dropdown
+   - Set `dry_run` to `false`
+   - Click **"Run workflow"** button
+
+3. **Observe Automatic Chaining:**
+   - Content Aggregator completes successfully
+   - Waits 30 seconds for Notion sync
+   - Automatically triggers Social Publisher
+   - Social Publisher posts to X and LinkedIn
+   - Both platforms' URLs are saved back to Notion
+
+#### Expected Logs (Success)
+
+**Content Aggregator → Trigger Publisher Job:**
 ```
-https://notion.so/workspace/abc123def456?v=...
-                        ^^^^^^^^^^^^^^^^
-                        This is your Database ID
+⏳ Waiting 30 seconds for Notion to sync...
+✅ Wait complete
+🚀 Triggering Social Publisher workflow...
+   Repository: algorythmos/algorythmos-ai-content-scheduler
+   Workflow: post.yml
+   Branch: main
+📊 Response Status: 204
+✅ Successfully triggered Social Publisher workflow!
 ```
 
-Or from Share menu → Copy link → Extract the 32-character ID
-
-Save this as `NOTION_DB_ID`
-
----
-
-## Step 2: X (Twitter) API Setup
-
-### 2.1 Create Developer Account
-
-1. Go to [Twitter Developer Portal](https://developer.twitter.com/en/portal/dashboard)
-2. Sign up for Developer Account (free tier)
-3. Complete the application form
-
-### 2.2 Create App
-
-1. Click **"+ Create App"**
-2. Name: `Algorythmos AI Scheduler`
-3. Set App Permissions to: **Read and Write**
-
-### 2.3 Generate Credentials
-
-1. Go to **Keys and tokens** tab
-2. Generate/copy these values:
-   - **API Key** → Save as `X_API_KEY` (or `API_KEY`)
-   - **API Secret Key** → Save as `X_API_SECRET` (or `API_KEY_SECRET`)
-   - **Access Token** → Save as `X_ACCESS_TOKEN` (or `ACCESS_TOKEN`)
-   - **Access Token Secret** → Save as `X_ACCESS_TOKEN_SECRET` (or `ACCESS_TOKEN_SECRET`)
-
-⚠️ **Important**: Keep these secret! Never commit them to Git.
-
----
-
-## Step 3: LinkedIn API Setup
-
-### 3.1 Create LinkedIn App
-
-1. Go to [LinkedIn Developers](https://www.linkedin.com/developers/apps)
-2. Click **"Create app"**
-3. Fill in details:
-   - App name: `Algorythmos AI Scheduler`
-   - LinkedIn Page: Select your company page (or create one)
-   - App logo: Upload Algorythmos logo
-   - Accept terms
-
-### 3.2 Configure Products
-
-1. In your app, go to **Products** tab
-2. Request access to: **Share on LinkedIn**
-3. Request access to: **Sign In with LinkedIn** (if posting as user)
-
-### 3.3 Get Access Token
-
-**Option A: Organization Posts (Recommended)**
-
-1. Go to **Auth** tab
-2. Copy **Client ID** and **Client Secret**
-3. Add OAuth 2.0 redirect URL: `https://localhost/callback`
-4. Use OAuth 2.0 flow to get access token (see below)
-5. Get your organization ID from LinkedIn Page → About → Company ID
-6. Save token as `LINKEDIN_ACCESS_TOKEN`
-7. Save org ID as `LINKEDIN_ORG_ID`
-
-**Option B: Personal Posts**
-
-1. Same as above, but omit `LINKEDIN_ORG_ID`
-2. Posts will be from your personal profile
-
-**Getting Access Token (Manual OAuth Flow)**
-
-```bash
-# 1. Build authorization URL (replace CLIENT_ID)
-https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id=YOUR_CLIENT_ID&redirect_uri=https://localhost/callback&scope=w_member_social
-
-# 2. Open in browser → Authorize → Copy 'code' parameter from redirect URL
-
-# 3. Exchange code for token (replace values)
-curl -X POST https://www.linkedin.com/oauth/v2/accessToken \
-  -d grant_type=authorization_code \
-  -d code=YOUR_CODE \
-  -d redirect_uri=https://localhost/callback \
-  -d client_id=YOUR_CLIENT_ID \
-  -d client_secret=YOUR_CLIENT_SECRET
-
-# 4. Copy 'access_token' from response
+**Social Publisher:**
+```
+🚀 Publishing to X...
+✅ Posted to X successfully
+🚀 Publishing to LinkedIn...
+✅ Posted to LinkedIn successfully
+✅ Updated Notion with X and LinkedIn URLs
 ```
 
 ---
 
-## Step 4: OpenAI API Setup
+## 📋 Complete Secrets Checklist
 
-### 4.1 Create API Key
+| Secret | Status | Description |
+|--------|--------|-------------|
+| `NOTION_TOKEN` | ✅ | Notion integration token |
+| `NOTION_DB_ID` | ✅ | Notion database ID |
+| `X_API_KEY` | ✅ | X/Twitter API key |
+| `X_API_SECRET` | ✅ | X/Twitter API secret |
+| `X_ACCESS_TOKEN` | ✅ | X/Twitter access token |
+| `X_ACCESS_TOKEN_SECRET` | ✅ | X/Twitter access token secret |
+| `LINKEDIN_ACCESS_TOKEN` | ✅ | LinkedIn OAuth access token |
+| `LINKEDIN_CLIENT_ID` | ✅ | LinkedIn app client ID |
+| `LINKEDIN_CLIENT_SECRET` | ✅ | LinkedIn app client secret |
+| `GH_PAT` | ⚠️ **NEEDS SETUP** | GitHub PAT with `workflow` scope |
 
-1. Go to [OpenAI API Keys](https://platform.openai.com/api-keys)
-2. Click **"+ Create new secret key"**
-3. Name: `Algorythmos Content Scheduler`
-4. Copy the key (starts with `sk-`)
-5. Save as `OPENAI_API_KEY`
+### Optional Secrets
 
-### 4.2 Add Credits
-
-1. Go to [Billing](https://platform.openai.com/account/billing/overview)
-2. Add $5-10 credit (will last months with gpt-4o-mini)
-
-⚠️ **Optional**: If you skip this, the system will use fallback heuristic summarization (still works!)
-
----
-
-## Step 5: Configure GitHub Secrets
-
-### 5.1 Add Repository Secrets
-
-1. Go to your GitHub repo
-2. Navigate to **Settings → Secrets and variables → Actions**
-3. Click **"New repository secret"** for each:
-
-**Required Secrets:**
-
-| Secret Name | Value | Source |
-|------------|-------|--------|
-| `NOTION_TOKEN` | `secret_xxx...` | Notion Integration (Step 1.1) |
-| `NOTION_DB_ID` | `abc123def456...` | Notion Database ID (Step 1.5) |
-| `X_API_KEY` or `API_KEY` | Your X API Key | Twitter Dev Portal (Step 2.3) |
-| `X_API_SECRET` or `API_KEY_SECRET` | Your X API Secret | Twitter Dev Portal (Step 2.3) |
-| `X_ACCESS_TOKEN` or `ACCESS_TOKEN` | Your X Access Token | Twitter Dev Portal (Step 2.3) |
-| `X_ACCESS_TOKEN_SECRET` or `ACCESS_TOKEN_SECRET` | Your X Access Token Secret | Twitter Dev Portal (Step 2.3) |
-
-**Optional Secrets:**
-
-| Secret Name | Value | Source |
-|------------|-------|--------|
-| `LINKEDIN_ACCESS_TOKEN` | OAuth token | LinkedIn OAuth (Step 3.3) |
-| `LINKEDIN_ORG_ID` | Company ID | LinkedIn Page (Step 3.3) |
-| `OPENAI_API_KEY` | `sk-xxx...` | OpenAI Platform (Step 4.1) |
-
----
-
-## Step 6: Test the Setup
-
-### 6.1 Local Testing (Recommended)
-
-```bash
-# Clone repo
-git clone https://github.com/YOUR_USERNAME/algorythmos-ai-content-scheduler.git
-cd algorythmos-ai-content-scheduler
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Set environment variables (create .env file)
-cat > .env << EOF
-NOTION_TOKEN=secret_xxx
-NOTION_DB_ID=abc123def456
-X_API_KEY=xxx
-X_API_SECRET=xxx
-X_ACCESS_TOKEN=xxx
-X_ACCESS_TOKEN_SECRET=xxx
-LINKEDIN_ACCESS_TOKEN=xxx
-LINKEDIN_ORG_ID=12345678
-OPENAI_API_KEY=sk-xxx
-EOF
-
-# Load .env
-export $(cat .env | xargs)
-
-# Test fetcher (dry run - doesn't write to Notion)
-python fetch_ai_news.py --dry-run
-
-# Expected output: JSON with top article or "No fresh items"
-
-# Test fetcher (real run - writes to Notion)
-python fetch_ai_news.py
-
-# Check your Notion database - should see new "Scheduled" entry
-
-# Test X poster
-python main.py --platform x
-
-# Test LinkedIn poster
-python main.py --platform linkedin
-```
-
-### 6.2 GitHub Actions Testing
-
-1. Go to **Actions** tab in your repo
-2. Select **AI Content Fetcher** workflow
-3. Click **Run workflow**
-4. Set `dry_run: false`
-5. Click **Run workflow** button
-6. Check logs and Notion database
-
----
-
-## Step 7: Enable Automated Scheduling
-
-The workflows are already configured to run automatically:
-
-- **Fetcher**: Daily at 10:05 AM Paris time
-- **Poster**: Daily at 10:10 AM Paris time (5 min after fetcher)
-
-### Verify Schedule
-
-1. Go to **Actions** tab
-2. Click on workflow name
-3. You'll see "This workflow has a workflow_dispatch event trigger"
-4. Check that scheduled runs appear in the runs list
-
----
-
-## 🎉 You're Done!
-
-Your Algorythmos AI Content Scheduler is now:
-- ✅ Fetching AI news daily
-- ✅ Scoring and summarizing with GPT-4o-mini
-- ✅ Queuing in Notion
-- ✅ Auto-posting to X (Twitter)
-- ✅ Auto-posting to LinkedIn
-- ✅ Storing post URLs back in Notion
+| Secret | Status | Description |
+|--------|--------|-------------|
+| `OPENAI_API_KEY` | ⚠️ Optional | OpenAI API key (uses fallback if missing) |
+| `OPENAI_MODEL` | ⚠️ Optional | Override model (default: `gpt-4o-mini`) |
 
 ---
 
 ## 🔧 Troubleshooting
 
-### "No scheduled posts due"
-- Check Notion database has entries with `Status=Scheduled`
-- Verify `Scheduled Time` is in the past
-- Run `python check_ready_to_post.py` to debug
+### Issue: 403 Error on Workflow Trigger
 
-### X API Errors
-- Verify all 4 X credentials are set correctly
-- Check App permissions are "Read and Write"
-- Ensure tokens haven't expired
+**Symptom:**
+```
+❌ Failed to trigger workflow. Status code: 403
+Resource not accessible by integration
+```
 
-### LinkedIn API Errors
-- Check access token hasn't expired (LinkedIn tokens expire after 60 days)
-- Verify app has "Share on LinkedIn" product enabled
-- For org posts, ensure `LINKEDIN_ORG_ID` is correct
+**Cause:** `GH_PAT` secret is missing or has insufficient permissions.
 
-### OpenAI Errors
-- Check API key is valid
-- Verify billing is set up
-- Fallback will activate automatically if OpenAI fails
-
-### Notion Errors
-- Verify integration is connected to database
-- Check all required properties exist with correct names
-- Ensure property types match (Text, Select, URL, etc.)
+**Solution:**
+1. Verify `GH_PAT` secret exists in repository settings
+2. Ensure PAT has `workflow` scope checked
+3. Check PAT hasn't expired (generate new one if needed)
+4. Retry workflow
 
 ---
 
-## 📊 Monitoring
+### Issue: PAT Expired
 
-### GitHub Actions
-- Go to **Actions** tab to see all runs
-- Click on a run to see detailed logs
-- Failed runs will show red ❌
-- Successful runs will show green ✓
+**Symptom:** Workflow trigger fails with authentication error after 90 days.
 
-### Notion Database
-- `Status` column shows current state
-- `Error Message` shows what went wrong
-- `Tweet URL` and `LinkedIn URL` link to posts
+**Solution:**
+1. Generate new PAT (follow steps above)
+2. Update `GH_PAT` secret with new token
+3. No code changes needed
 
 ---
 
-## 🚀 Next Steps
+### Issue: No Automatic Triggering
 
-1. **Add more RSS feeds**: Edit `RSS_FEEDS` list in `fetch_ai_news.py`
-2. **Customize scoring**: Adjust `BOOST_KEYWORDS` and scoring logic
-3. **Add images**: RSS feeds with `media_content` will auto-attach images
-4. **Thread support**: Use `Thread Group ID` and `Thread Position` properties
-5. **Multiple accounts**: Duplicate workflows with different secrets
+**Symptom:** Content Aggregator completes but Social Publisher doesn't start.
 
----
-
-## 📞 Support
-
-- Issues: [GitHub Issues](https://github.com/skalaliya/algorythmos-ai-content-scheduler/issues)
-- Email: info@algorythmos.fr
-- Website: [algorythmos.fr](https://algorythmos.fr)
+**Checklist:**
+- [ ] `GH_PAT` secret is added
+- [ ] Workflow ran with `dry_run=false` (dry runs don't trigger)
+- [ ] Content Aggregator job completed successfully
+- [ ] Check Actions logs for "Trigger Social Publisher" job
 
 ---
 
-**Built with ❤️ by Algorythmos** | France Remote Worldwide
+## 🎉 What Happens After Setup
+
+Once `GH_PAT` is configured, the system runs fully autonomously:
+
+### Daily Schedule (Europe/Paris Time)
+
+**10:05 AM** - Content Aggregator runs:
+- Fetches AI news from 7 sources
+- Scores by relevance + recency
+- Summarizes with GPT-4o-mini (or fallback)
+- Creates Notion entry with `Status=Scheduled`
+
+**10:05 AM + 30 seconds** - Automatic trigger:
+- Content Aggregator waits for Notion sync
+- Triggers Social Publisher via GitHub API
+
+**10:05 AM + 31 seconds** - Social Publisher runs:
+- Fetches scheduled posts from Notion
+- Posts to X (Twitter) and LinkedIn
+- Updates Notion with post URLs
+- Sets `Status=Posted`
+
+**10:10 AM** - Backup schedule:
+- Social Publisher also runs on independent schedule
+- Acts as fallback if auto-trigger fails
+
+### Monthly Cost
+
+- **GitHub Actions:** ~90 minutes/month (4.5% of free tier)
+- **OpenAI API:** ~$0.003/month (negligible)
+- **X API:** Free tier (30/1500 posts)
+- **LinkedIn API:** Free tier (30/3000 posts)
+- **Notion API:** Free (unlimited)
+
+**Total:** Essentially **free** ✨
+
+---
+
+## 📚 Additional Resources
+
+- **Full Documentation:** [README.md](README.md)
+- **Repository:** https://github.com/algorythmos/algorythmos-ai-content-scheduler
+- **Notion Template:** Create your own database with required properties (see README)
+- **LinkedIn Token Generator:** `get_linkedin_token.py` (run locally)
+
+---
+
+## ✅ Setup Complete!
+
+Once you've added the `GH_PAT` secret and tested successfully, your AI Content Scheduler is fully operational! 🚀
+
+The system will now:
+- ✅ Run daily at 10:05 AM Paris time
+- ✅ Automatically aggregate AI news
+- ✅ Summarize with AI
+- ✅ Queue in Notion
+- ✅ Auto-trigger publishing
+- ✅ Post to X and LinkedIn
+- ✅ Track URLs
+- ✅ Handle errors gracefully
+
+**No further action required** - just monitor the Actions tab and enjoy automated content! 🎉
