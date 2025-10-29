@@ -48,3 +48,19 @@ jobs:
           else
             python fetch_ai_news.py
           fi
+
+  trigger-publisher:
+    name: Trigger Social Publisher
+    needs: [fetch]
+    if: ${{ success() && !inputs.dry_run }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Wait for Notion to sync
+        run: sleep 30
+      
+      - name: Trigger publishing workflow
+        uses: peter-evans/repository-dispatch@v3
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          event-type: content-ready-to-publish

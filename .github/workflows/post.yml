@@ -8,6 +8,8 @@ on:
   workflow_run:
     workflows: ["📰 Algorythmos Content Aggregator"]  # run right after fetcher
     types: [completed]
+  repository_dispatch:
+    types: [content-ready-to-publish]  # triggered by fetch workflow
   workflow_dispatch:  # Allow manual trigger
 
 concurrency:
@@ -21,6 +23,7 @@ jobs:
     if: >
       github.event_name == 'schedule'
       || github.event_name == 'workflow_dispatch'
+      || github.event_name == 'repository_dispatch'
       || (github.event_name == 'workflow_run'
           && github.event.workflow_run.conclusion == 'success')
 
