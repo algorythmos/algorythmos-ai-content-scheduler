@@ -1,17 +1,21 @@
 <div align="center">
-  <h1>🧠 Algorythmos AI Research Scheduler</h1>
+  <h1>🧠 Algorythmos AI Research Digest</h1>
 
-  <p><strong>Top AI Research → X & LinkedIn Automation</strong></p>
+  <p><strong>Cutting-Edge arXiv Papers → X & LinkedIn</strong></p>
 
-  <p><i>arXiv → GPT-4o-mini → Notion → GitHub Actions → X + LinkedIn</i></p>
+  <p><i>SOTA AI Research → GPT-4o-mini → Notion → Automated Posts</i></p>
+
+  <blockquote><strong>We don't post news. We post breakthroughs.</strong></blockquote>
 
 </div>
 
 <p align="center">
 
-  <img src="https://img.shields.io/badge/Python-3.11-yellow?style=for-the-badge&logo=python"/>
+  <img src="https://img.shields.io/badge/Python-3.11-blue?style=for-the-badge&logo=python"/>
 
-  <img src="https://img.shields.io/badge/OpenAI-gpt--4o--mini-2ea44f?style=for-the-badge&logo=openai"/>
+  <img src="https://img.shields.io/badge/arXiv-cs.AI-orange?style=for-the-badge&logo=arxiv"/>
+
+  <img src="https://img.shields.io/badge/OpenAI-gpt--4o--mini-green?style=for-the-badge&logo=openai"/>
 
   <img src="https://img.shields.io/badge/Notion-API-black?style=for-the-badge&logo=notion"/>
 
@@ -19,9 +23,7 @@
 
   <img src="https://img.shields.io/badge/LinkedIn-API-0A66C2?style=for-the-badge&logo=linkedin"/>
 
-  <img src="https://img.shields.io/badge/arXiv-API-B31B1B?style=for-the-badge&logo=arxiv"/>
-
-  <img src="https://img.shields.io/badge/version-v2.0.0-blue?style=for-the-badge"/>
+  <img src="https://img.shields.io/badge/version-v3.0.0-blue?style=for-the-badge"/>
 
 </p>
 
@@ -29,17 +31,28 @@
 
 ## Overview
 
-This repo **automatically discovers, summarizes, and shares** cutting-edge AI research papers from **arXiv** to **X (Twitter) and LinkedIn** — fully managed via **Notion** and **GitHub Actions**.
+Fully automated system that **discovers, analyzes, and shares** breakthrough AI research from **arXiv** to **X (Twitter) and LinkedIn** — professionally curated with GPT-4o-mini and managed via **Notion** and **GitHub Actions**.
 
-**Focus:** State-of-the-art (SOTA) innovations in cs.AI, cs.LG, cs.CL, cs.CV
+**Mission:** Position Algorythmos as a thought leader in AI by sharing SOTA research with technical depth and business context.
 
-- **<24h papers** get +20 points
-- **Innovation keywords** (SOTA, novel, breakthrough) +5pts each  
-- **Duplicate prevention** via arXiv ID matching
-- **Research-focused summaries** highlighting key contributions
-- **Full observability** in Notion + Actions logs
+### What Makes This Elite
 
-**Built and maintained by:** Algorythmos
+- **🎯 Impact-First Curation**: SOTA detection (+25pts), hot topics (+10pts), prestige orgs (+20pts)
+- **📊 Metric-Driven Content**: X posts include benchmarks, LinkedIn dives into method/results
+- **🔬 Research-Focused**: cs.AI, cs.LG, cs.CL, cs.CV from arXiv (no news blogs)
+- **⚡ Real-Time Intelligence**: <24h papers prioritized (+20pts)
+- **🚫 Zero Duplicates**: arXiv ID tracking prevents reposting
+- **💼 Professional Templates**: Structured X (≤280) & LinkedIn (≤2000) formats
+- **📈 Full Observability**: Notion database + GitHub Actions logs
+
+**Compare To:**
+| Feature | Algorythmos Digest | Papers With Code | Hugging Face Daily |
+|---------|-------------------|------------------|-------------------|
+| Source | arXiv (cs.AI/LG/CL/CV) | arXiv + GitHub | arXiv + Community |
+| Curation | SOTA + Impact Filters | Community votes | Trending |
+| Summaries | Metric-driven, MLOps-focused | Code snippets | Brief |
+| Platforms | X + LinkedIn (auto) | X (manual) | X (auto) |
+| Brand Voice | Algorythmos expertise | Neutral | Community |
 
 ---
 
@@ -48,7 +61,9 @@ This repo **automatically discovers, summarizes, and shares** cutting-edge AI re
 ```mermaid
 graph TD
     A[arXiv API] --> B[fetch_ai_news.py]
-    B -->|Score papers by novelty/recency| C[GPT-4o-mini Summarization]
+    B -->|Enhanced Scoring| C[SOTA Detection]
+    C -->|Top Paper| D[GPT-4o-mini]
+    D -->|Professional Templates| E[Notion Database]
     C -->|Research-focused summaries| D[Notion DB]
     D -->|Status=Scheduled| E[Workflow Chaining]
     E -->|X API| F[Tweet Published 🚀]
