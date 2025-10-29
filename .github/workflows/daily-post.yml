@@ -1,0 +1,83 @@
+name: 📅 Daily AI Research Post (10 AM Paris)
+
+on:
+  # 10:00 AM Paris = 08:00 UTC (CET winter) / 09:00 UTC (CEST summer)
+  # GitHub Actions uses UTC, so we use 08:00 UTC which maps to 10:00 AM Paris in winter
+  # During summer (CEST), this will be 10:00 AM CEST
+  schedule:
+    - cron: "0 8 * * *"  # 10:00 AM Paris time (UTC+1 in winter, UTC+2 in summer)
+  workflow_dispatch:
+
+concurrency:
+  group: daily-ai-research-post
+  cancel-in-progress: true
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    name: Post AI Research to X and LinkedIn
+    
+    steps:
+      - name: 📦 Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+      
+      - name: 📚 Install dependencies
+        run: pip install -r requirements.txt
+      
+      - name: ⏰ Display current time
+        run: |
+          echo "⏰ Current time (UTC): $(date -u '+%Y-%m-%d %H:%M:%S UTC')"
+          echo "📍 This corresponds to 10:00 AM Paris time"
+      
+      - name: 🐦 Post to X (Twitter)
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          X_ACCESS_TOKEN: ${{ secrets.X_ACCESS_TOKEN }}
+          X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
+          X_API_KEY: ${{ secrets.X_API_KEY }}
+          X_API_SECRET: ${{ secrets.X_API_SECRET }}
+          LOG_LEVEL: INFO
+        run: |
+          echo "🐦 Posting to X (Twitter)..."
+          python main.py --platform x
+          if [ $? -eq 0 ]; then
+            echo "✅ Successfully posted to X"
+          else
+            echo "❌ Failed to post to X"
+            exit 1
+          fi
+      
+      - name: 💼 Post to LinkedIn
+        env:
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+          LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
+          LINKEDIN_ORG_ID: ${{ secrets.LINKEDIN_ORG_ID }}
+          LOG_LEVEL: INFO
+        run: |
+          echo "💼 Posting to LinkedIn..."
+          python main.py --platform linkedin
+          if [ $? -eq 0 ]; then
+            echo "✅ Successfully posted to LinkedIn"
+          else
+            echo "❌ Failed to post to LinkedIn"
+            exit 1
+          fi
+      
+      - name: 🎉 Post completion summary
+        if: success()
+        run: |
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "🎉 Daily AI Research Post Complete!"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+          echo "✅ Posted to X (Twitter)"
+          echo "✅ Posted to LinkedIn"
+          echo "📅 Next post: Tomorrow at 10:00 AM Paris time"
+          echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"

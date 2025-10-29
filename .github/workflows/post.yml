@@ -1,14 +1,17 @@
-name: 🚀 Algorythmos Social Publisher
+name: 🚀 Algorythmos Social Publisher (Manual)
 
 on:
-  # Run once daily, ~5 minutes after fetcher (allows time for Notion write)
-  schedule:
-    - cron: "10 8 * 3-10 *"     # 08:10 UTC ≈ 10:10 Paris during CEST (Mar–Oct)
-    - cron: "10 9 * 11,12,1,2 *" # 09:10 UTC ≈ 10:10 Paris during CET (Nov–Feb)
-  workflow_run:
-    workflows: ["📰 Algorythmos Content Aggregator"]  # run right after fetcher
-    types: [completed]
-  workflow_dispatch:  # Allow manual trigger and API trigger from fetch workflow
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: 'Platform to post to'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - x
+          - linkedin
+          - both
 
 concurrency:
   group: algorythmos-social-publisher
@@ -18,18 +21,10 @@ jobs:
   post:
     runs-on: ubuntu-latest
     name: Publish to Social Media
-    if: >
-      github.event_name == 'schedule'
-      || github.event_name == 'workflow_dispatch'
-      || (github.event_name == 'workflow_run'
-          && github.event.workflow_run.conclusion == 'success')
 
     steps:
       - name: 📦 Checkout repository
         uses: actions/checkout@v4
-
-      - name: ✅ Repository checked out
-        run: echo "✅ Repository checked out successfully"
 
       - name: 🐍 Set up Python 3.11
         uses: actions/setup-python@v5
@@ -37,32 +32,10 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
-      - name: ✅ Python environment ready
-        run: |
-          echo "✅ Python 3.11 environment set up"
-          echo "📍 Python version: $(python --version)"
+      - name:  Install dependencies
+        run: pip install -r requirements.txt
 
-      - name: 📚 Install dependencies
-        run: |
-          echo "📥 Installing Python dependencies from requirements.txt..."
-          pip install -r requirements.txt
-          echo "✅ Dependencies installed successfully"
-          echo "📦 Installed packages:"
-          pip list
-
-      - name: 🔍 Verify content ready for publication
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
-          LOG_LEVEL: INFO
-        run: |
-          echo "🔍 Checking Notion for scheduled content..."
-          echo "📊 Notion DB ID: ${{ secrets.NOTION_DB_ID }}"
-          echo "🔑 Notion Token: ${NOTION_TOKEN:0:20}..."
-          python check_ready_to_post.py || { echo "⚠️ No Scheduled rows ready. Skipping."; exit 0; }
-          echo "✅ Content verification complete"
-
-      - name: 🐦 Publish to X (Twitter)
+      - name: � Publish to platform(s)
         env:
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
@@ -70,37 +43,9 @@ jobs:
           X_ACCESS_TOKEN_SECRET: ${{ secrets.X_ACCESS_TOKEN_SECRET }}
           X_API_KEY: ${{ secrets.X_API_KEY }}
           X_API_SECRET: ${{ secrets.X_API_SECRET }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          LOG_LEVEL: INFO
-        run: |
-          echo "🐦 Starting X (Twitter) publication..."
-          echo "🔑 X API Key: ${X_API_KEY:0:20}..."
-          echo "🔑 X Access Token: ${X_ACCESS_TOKEN:0:20}..."
-          python main.py --platform x
-          if [ $? -eq 0 ]; then
-            echo "✅ Successfully published to X"
-          else
-            echo "❌ Failed to publish to X"
-            exit 1
-          fi
-
-      - name: 💼 Publish to LinkedIn
-        if: secrets.LINKEDIN_ACCESS_TOKEN != ''
-        env:
-          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
-          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
           LINKEDIN_ACCESS_TOKEN: ${{ secrets.LINKEDIN_ACCESS_TOKEN }}
           LINKEDIN_ORG_ID: ${{ secrets.LINKEDIN_ORG_ID }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           LOG_LEVEL: INFO
         run: |
-          echo "💼 Starting LinkedIn publication..."
-          echo "🔑 LinkedIn Access Token: ${LINKEDIN_ACCESS_TOKEN:0:20}..."
-          echo "🏢 LinkedIn Org ID: ${{ secrets.LINKEDIN_ORG_ID }}"
-          python main.py --platform linkedin
-          if [ $? -eq 0 ]; then
-            echo "✅ Successfully published to LinkedIn"
-          else
-            echo "❌ Failed to publish to LinkedIn"
-            exit 1
-          fi
+          echo "� Publishing to: ${{ inputs.platform }}"
+          python main.py --platform ${{ inputs.platform }}

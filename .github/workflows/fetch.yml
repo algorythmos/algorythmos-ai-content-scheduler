@@ -1,11 +1,9 @@
 name: 📰 Algorythmos Content Aggregator
 
 on:
-  # Europe/Paris ≈ UTC+2 (Mar–Oct) and UTC+1 (Nov–Feb).
-  # Run at ~10:05 Paris local using two UTC crons.
+  # Run at 09:45 UTC (15 minutes before daily posting at 10 AM Paris)
   schedule:
-    - cron: "5 8 * 3-10 *"  # 08:05 UTC ≈ 10:05 Paris during CEST (Mar–Oct)
-    - cron: "5 9 * 11,12,1,2 *"  # 09:05 UTC ≈ 10:05 Paris during CET (Nov–Feb)
+    - cron: "45 9 * * *"  # 09:45 UTC daily
   workflow_dispatch:
     inputs:
       dry_run:
