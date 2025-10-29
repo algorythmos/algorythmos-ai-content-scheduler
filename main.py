@@ -105,6 +105,13 @@ def get_prop_number(p: Dict[str, Any], name: str) -> int:
     v = p["properties"].get(name, {}).get("number")
     return int(v) if v is not None else 0
 
+def get_prop_url(p: Dict[str, Any], name: str) -> str:
+    """Get URL property value from Notion page."""
+    val = p["properties"].get(name)
+    if not val:
+        return ""
+    return val.get("url", "") or ""
+
 def get_media_urls(p: Dict[str, Any]) -> List[str]:
     txt = get_prop_text(p, "Media URLs")
     urls = [u.strip() for u in txt.split() if u.strip().startswith("http")]
